@@ -10,8 +10,8 @@ gi.require_version("Gtk", "4.0")
 
 from gi.repository import Gdk, Gtk  # noqa: E402
 
-from patience.ui.cards import CARD_H, CARD_W, build_card_widget, resolve_card_data_dir
-from patience.ui.piles import FACE_DOWN_OVERLAP, FACE_UP_OVERLAP, TABLEAU_COL_GAP, build_tableau_column
+from patience.ui.cards import CARD_W, build_card_widget, resolve_card_data_dir
+from patience.ui.piles import TABLEAU_COL_GAP, build_named_pile
 
 TABLEAU_COLS = 12
 PILE_SIZE = 4
@@ -20,6 +20,7 @@ PILE_SIZE = 4
 # ---------------------------------------------------------------------------
 # State
 # ---------------------------------------------------------------------------
+
 
 @dataclass(frozen=True)
 class CruelState:
@@ -55,6 +56,7 @@ def create_initial_state() -> CruelState:
 # ---------------------------------------------------------------------------
 # Rules
 # ---------------------------------------------------------------------------
+
 
 def can_place_on_foundation(card: Card, top: Card | None) -> bool:
     if top is None:
@@ -114,6 +116,7 @@ def collect_and_redeal(tableau: tuple[Pile, ...]) -> None:
 # ---------------------------------------------------------------------------
 # Window
 # ---------------------------------------------------------------------------
+
 
 @dataclass
 class Selection:
@@ -187,18 +190,24 @@ class CruelWindow(Gtk.ApplicationWindow):
         outer = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=14)
 
         # Foundation row (4 piles, left-aligned)
-        foundation_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=TABLEAU_COL_GAP)
+        foundation_row = Gtk.Box(
+            orientation=Gtk.Orientation.HORIZONTAL, spacing=TABLEAU_COL_GAP
+        )
         for idx, pile in enumerate(self._state.foundations):
             foundation_row.append(self._build_foundation_pile(idx, pile))
         outer.append(foundation_row)
 
         # Tableau: two rows of 6 columns each
-        top_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=TABLEAU_COL_GAP)
+        top_row = Gtk.Box(
+            orientation=Gtk.Orientation.HORIZONTAL, spacing=TABLEAU_COL_GAP
+        )
         for col in range(6):
             top_row.append(self._build_tableau_col(col))
         outer.append(top_row)
 
-        bottom_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=TABLEAU_COL_GAP)
+        bottom_row = Gtk.Box(
+            orientation=Gtk.Orientation.HORIZONTAL, spacing=TABLEAU_COL_GAP
+        )
         for col in range(6, 12):
             bottom_row.append(self._build_tableau_col(col))
         outer.append(bottom_row)
@@ -236,19 +245,14 @@ class CruelWindow(Gtk.ApplicationWindow):
         return frame
 
     def _build_tableau_col(self, col: int) -> Gtk.Widget:
-        selected_start = None
-        if self._selection and self._selection.pile_index == col:
-            pile = self._state.tableau[col]
-            # In Cruel only the top card can be selected/moved.
-            if len(pile.cards) > 0:
-                selected_start = len(pile.cards) - 1
-
-        return build_tableau_column(
-            col + 1,
-            self._state.tableau[col],
+        selected = self._selection is not None and self._selection.pile_index == col
+        pile = self._state.tableau[col]
+        return build_named_pile(
+            f"Pile {col + 1}",
+            pile,
             self._card_widget,
-            on_click=lambda y_pos, c=col: self._on_tableau_clicked(c, y_pos),
-            selected_start_index=selected_start,
+            on_click=lambda c=col: self._on_tableau_clicked(c, 0.0),
+            selected=selected,
         )
 
     def _card_widget(self, card: Card | None) -> Gtk.Widget:
@@ -289,7 +293,7 @@ class CruelWindow(Gtk.ApplicationWindow):
         else:
             self._set_status("Illegal move to foundation")
 
-    def _on_tableau_clicked(self, pile_idx: int, y_pos: float) -> None:
+    def _on_tableau_clicked(self, pile_idx: int, _y_pos: float) -> None:
         pile = self._state.tableau[pile_idx]
 
         if self._selection is not None:
