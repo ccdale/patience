@@ -340,13 +340,12 @@ class CruelWindow(Gtk.ApplicationWindow):
         css.load_from_data(
             b"""
             .selected-pile {
-                border: 2px solid #2a7fff;
+                box-shadow: 0 0 0 2px #2a7fff;
                 border-radius: 8px;
                 background: alpha(#2a7fff, 0.08);
             }
             .selected-card {
-                outline: 2px solid #2a7fff;
-                outline-offset: -2px;
+                box-shadow: inset 0 0 0 2px #2a7fff;
                 border-radius: 6px;
             }
             """
