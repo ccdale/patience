@@ -321,7 +321,9 @@ class CruelWindow(Gtk.ApplicationWindow):
                 pile.append(src_pile.pop())
                 self._selection = None
                 self._refresh_board()
-                moves = _collect_auto_moves(self._state.foundations, self._state.tableau)
+                moves = _collect_auto_moves(
+                    self._state.foundations, self._state.tableau
+                )
                 self._animate_auto_moves(moves, check_win=True)
             else:
                 self._set_status("Illegal move")
@@ -353,7 +355,9 @@ class CruelWindow(Gtk.ApplicationWindow):
         if card is not None:
             self._state.foundations[found_idx].append(pile.pop())
         self._refresh_board()
-        GLib.timeout_add(220, lambda: self._animate_auto_moves(moves[1:], check_win) or False)
+        GLib.timeout_add(
+            440, lambda: self._animate_auto_moves(moves[1:], check_win) or False
+        )
 
     def _check_win(self) -> None:
         total = sum(len(f) for f in self._state.foundations)
