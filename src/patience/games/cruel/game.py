@@ -8,7 +8,7 @@ from ccacards.pile import Pile
 gi.require_version("Gdk", "4.0")
 gi.require_version("Gtk", "4.0")
 
-from gi.repository import Gdk, Gtk  # noqa: E402
+from gi.repository import Gdk, GLib, Gtk  # noqa: E402
 
 from patience.ui.cards import CARD_W, build_card_widget, resolve_card_data_dir
 from patience.ui.piles import TABLEAU_COL_GAP, build_named_pile
@@ -78,22 +78,32 @@ def _find_foundation_for(card: Card, foundations: tuple[Pile, ...]) -> int | Non
     return None
 
 
-def _auto_move_to_foundations(
+def _collect_auto_moves(
     foundations: tuple[Pile, ...],
     tableau: tuple[Pile, ...],
-) -> None:
+) -> list[tuple[int, int]]:
+    """Simulate the auto-move cascade and return an ordered list of
+    (tableau_idx, foundation_idx) pairs without modifying state."""
+    found_tops: list[Card | None] = [f.peek() for f in foundations]
+    tab_stacks: list[list[Card]] = [list(p.cards) for p in tableau]
+    moves: list[tuple[int, int]] = []
     moved = True
     while moved:
         moved = False
-        for pile in tableau:
-            top = pile.peek()
-            if top is None:
+        for tab_idx, tab in enumerate(tab_stacks):
+            if not tab:
                 continue
-            idx = _find_foundation_for(top, foundations)
-            if idx is not None:
-                foundations[idx].append(pile.pop())
-                moved = True
+            top = tab[-1]
+            for found_idx, found_top in enumerate(found_tops):
+                if can_place_on_foundation(top, found_top):
+                    tab.pop()
+                    found_tops[found_idx] = top
+                    moves.append((tab_idx, found_idx))
+                    moved = True
+                    break
+            if moved:
                 break
+    return moves
 
 
 def collect_and_redeal(tableau: tuple[Pile, ...]) -> None:
@@ -271,9 +281,10 @@ class CruelWindow(Gtk.ApplicationWindow):
     def _on_redeal_clicked(self, _button: Gtk.Button) -> None:
         collect_and_redeal(self._state.tableau)
         self._selection = None
-        _auto_move_to_foundations(self._state.foundations, self._state.tableau)
         self._set_status("Redealt.")
         self._refresh_board()
+        moves = _collect_auto_moves(self._state.foundations, self._state.tableau)
+        self._animate_auto_moves(moves)
 
     def _on_foundation_clicked(self, foundation_idx: int) -> None:
         if self._selection is None:
@@ -287,9 +298,9 @@ class CruelWindow(Gtk.ApplicationWindow):
         if can_place_on_foundation(card, dest.peek()):
             dest.append(sel_pile.pop())
             self._selection = None
-            _auto_move_to_foundations(self._state.foundations, self._state.tableau)
-            self._check_win()
             self._refresh_board()
+            moves = _collect_auto_moves(self._state.foundations, self._state.tableau)
+            self._animate_auto_moves(moves, check_win=True)
         else:
             self._set_status("Illegal move to foundation")
 
@@ -309,9 +320,9 @@ class CruelWindow(Gtk.ApplicationWindow):
             if card is not None and can_place_on_tableau(card, pile.peek()):
                 pile.append(src_pile.pop())
                 self._selection = None
-                _auto_move_to_foundations(self._state.foundations, self._state.tableau)
-                self._check_win()
                 self._refresh_board()
+                moves = _collect_auto_moves(self._state.foundations, self._state.tableau)
+                self._animate_auto_moves(moves, check_win=True)
             else:
                 self._set_status("Illegal move")
             return
@@ -326,6 +337,23 @@ class CruelWindow(Gtk.ApplicationWindow):
     # ------------------------------------------------------------------
     # Helpers
     # ------------------------------------------------------------------
+
+    def _animate_auto_moves(
+        self, moves: list[tuple[int, int]], check_win: bool = False
+    ) -> None:
+        """Apply auto-moves one at a time with a short delay between each so
+        the player can see each card slide to its foundation."""
+        if not moves:
+            if check_win:
+                self._check_win()
+            return
+        tab_idx, found_idx = moves[0]
+        pile = self._state.tableau[tab_idx]
+        card = pile.peek()
+        if card is not None:
+            self._state.foundations[found_idx].append(pile.pop())
+        self._refresh_board()
+        GLib.timeout_add(220, lambda: self._animate_auto_moves(moves[1:], check_win) or False)
 
     def _check_win(self) -> None:
         total = sum(len(f) for f in self._state.foundations)
