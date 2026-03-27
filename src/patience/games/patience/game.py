@@ -11,6 +11,8 @@ from gi.repository import Gtk  # noqa: E402
 from patience.ui.cards import build_card_widget, resolve_card_data_dir  # noqa: E402
 from patience.ui.piles import build_named_pile, build_tableau_column  # noqa: E402
 
+COLUMN_GAP = 14
+
 
 @dataclass(frozen=True)
 class PatienceState:
@@ -73,34 +75,38 @@ class PatienceWindow(Gtk.ApplicationWindow):
         title.set_halign(Gtk.Align.START)
         root.append(title)
 
-        board = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=14)
-        board.append(self._build_top_row())
-        board.append(self._build_tableau_row())
-        root.append(board)
-
+        root.append(self._build_board_grid())
         self.set_child(root)
 
-    def _build_top_row(self) -> Gtk.Widget:
-        row = Gtk.Grid(column_spacing=14)
+    def _build_board_grid(self) -> Gtk.Widget:
+        # Shared 7-column grid for alignment:
+        # top:    Stock(0), Waste(1), gap(2), F1(3), F2(4), F3(5), F4(6)
+        # bottom: T1(0),    T2(1),    T3(2),  T4(3), T5(4), T6(5), T7(6)
+        grid = Gtk.Grid(column_spacing=COLUMN_GAP, row_spacing=14)
+        grid.set_column_homogeneous(True)
 
-        row.attach(build_named_pile("Stock", self._state.stock, self._card_widget), 0, 0, 1, 1)
-        row.attach(build_named_pile("Waste", self._state.waste, self._card_widget), 1, 0, 1, 1)
+        grid.attach(build_named_pile("Stock", self._state.stock, self._card_widget), 0, 0, 1, 1)
+        grid.attach(build_named_pile("Waste", self._state.waste, self._card_widget), 1, 0, 1, 1)
 
-        spacer = Gtk.Box(hexpand=True)
-        row.attach(spacer, 2, 0, 1, 1)
-
-        for idx, pile in enumerate(self._state.foundations, start=3):
-            row.attach(
-                build_named_pile(f"Foundation {idx - 2}", pile, self._card_widget), idx, 0, 1, 1
+        for idx, pile in enumerate(self._state.foundations):
+            grid.attach(
+                build_named_pile(f"Foundation {idx + 1}", pile, self._card_widget),
+                idx + 3,
+                0,
+                1,
+                1,
             )
 
-        return row
-
-    def _build_tableau_row(self) -> Gtk.Widget:
-        row = Gtk.Grid(column_spacing=14)
         for column, pile in enumerate(self._state.tableau):
-            row.attach(build_tableau_column(column + 1, pile, self._card_widget), column, 0, 1, 1)
-        return row
+            grid.attach(
+                build_tableau_column(column + 1, pile, self._card_widget),
+                column,
+                1,
+                1,
+                1,
+            )
+
+        return grid
 
     def _card_widget(self, card) -> Gtk.Widget:
         return build_card_widget(card, self._card_data_dir)
