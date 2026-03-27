@@ -9,6 +9,11 @@ dependencies = [
 	"PyGObject>=3.48.2",
 ]
 
+[dependency-groups]
+dev = [
+	"pytest>=8.3.4,<9.0.0",
+]
+
 [project.scripts]
 patience = "patience.app:main"
 

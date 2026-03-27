@@ -1,4 +1,5 @@
 import gi
+
 from patience.games.registry import GAME_REGISTRY, GameSpec
 
 gi.require_version("Gtk", "4.0")
