@@ -1,0 +1,11 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Patience
+Comment=Play Patience (Klondike)
+Path=/home/chris/src/patience
+Exec=uv run patience
+Icon=/home/chris/src/patience/src/patience/games/patience/game-icon.svg
+Terminal=false
+Categories=Game;CardGame;
+StartupNotify=true
