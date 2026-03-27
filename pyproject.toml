@@ -1,6 +1,6 @@
 [project]
 name = "patience"
-version = "0.1.26"
+version = "0.1.27"
 description = "single player card games gtk4 interface"
 readme = "README.md"
 requires-python = ">=3.14"

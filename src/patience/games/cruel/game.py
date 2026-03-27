@@ -123,7 +123,11 @@ def _has_valid_moves(
                 return True
         # Can go to another tableau pile?
         for other in tops:
-            if other is not None and other is not card and can_place_on_tableau(card, other):
+            if (
+                other is not None
+                and other is not card
+                and can_place_on_tableau(card, other)
+            ):
                 return True
     return False
 
@@ -305,6 +309,7 @@ class CruelWindow(Gtk.ApplicationWindow):
         self._selection = None
         if not _has_valid_moves(self._state.foundations, self._state.tableau):
             self._set_status("No valid moves — game over.")
+            self._status.add_css_class("game-over")
             self._refresh_board()
             return
         self._set_status("Redealt.")
@@ -391,6 +396,7 @@ class CruelWindow(Gtk.ApplicationWindow):
             self._set_status("You win! 🎉")
 
     def _set_status(self, message: str) -> None:
+        self._status.remove_css_class("game-over")
         self._status.set_text(message)
 
     def _install_css(self) -> None:
@@ -405,6 +411,9 @@ class CruelWindow(Gtk.ApplicationWindow):
             .selected-card {
                 box-shadow: inset 0 0 0 2px #2a7fff;
                 border-radius: 6px;
+            }
+            .game-over {
+                color: #8b0000;
             }
             """
         )
