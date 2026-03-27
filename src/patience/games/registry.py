@@ -1,6 +1,9 @@
 from dataclasses import dataclass
 
 
+GAME_ICON_FILENAME = "game-icon.svg"
+
+
 @dataclass(frozen=True)
 class GameSpec:
     """Simple metadata for a game module to launch from the base app."""
@@ -16,6 +19,7 @@ GAME_REGISTRY: tuple[GameSpec, ...] = (
         id="klondike",
         title="Klondike",
         module="patience.games.klondike",
+        available=True,
     ),
     GameSpec(
         id="freecell",
