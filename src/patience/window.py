@@ -102,7 +102,7 @@ class LauncherWindow(Gtk.ApplicationWindow):
     def _find_game_icon_path(self, game: GameSpec) -> str | None:
         try:
             icon_resource = resources.files(game.module).joinpath(GAME_ICON_FILENAME)
-        except (ModuleNotFoundError, TypeError):
+        except ModuleNotFoundError, TypeError:
             return None
         if not icon_resource.is_file():
             return None
