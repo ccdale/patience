@@ -1,8 +1,9 @@
 [project]
 name = "patience"
-version = "0.1.27"
+version = "0.1.28"
 description = "single player card games gtk4 interface"
 readme = "README.md"
+license = {text = "GPL-3.0-only"}
 requires-python = ">=3.14"
 dependencies = [
 	"ccacards @ file:///home/chris/src/ccacards",
