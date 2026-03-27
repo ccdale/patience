@@ -16,13 +16,29 @@ def test_initial_state_card_counts() -> None:
     tableau_total = sum(len(p) for p in state.tableau)
     foundation_total = sum(len(p) for p in state.foundations)
     assert tableau_total + foundation_total == 52
-    assert len(state.tableau) == 13
+    assert len(state.tableau) == 12
+    # 4 Aces placed on foundations at start
+    assert foundation_total == 4
+    # 48 remaining cards in 12 piles of 4
+    assert tableau_total == 48
 
 
 def test_initial_state_all_face_up() -> None:
     state = create_initial_state()
     for pile in state.tableau:
         assert all(not card.facedown for card in pile.cards)
+
+
+def test_initial_state_aces_on_foundations() -> None:
+    state = create_initial_state()
+    # Every foundation starts with exactly one Ace
+    for foundation in state.foundations:
+        assert len(foundation) == 1
+        assert foundation.peek().value == 0  # Ace
+    # No Aces remain in tableau
+    for pile in state.tableau:
+        for card in pile.cards:
+            assert card.value != 0
 
 
 def test_can_place_on_foundation_ace_first() -> None:

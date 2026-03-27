@@ -13,7 +13,7 @@ from gi.repository import Gdk, Gtk  # noqa: E402
 from patience.ui.cards import CARD_H, CARD_W, build_card_widget, resolve_card_data_dir
 from patience.ui.piles import FACE_DOWN_OVERLAP, FACE_UP_OVERLAP, TABLEAU_COL_GAP, build_tableau_column
 
-TABLEAU_COLS = 13
+TABLEAU_COLS = 12
 PILE_SIZE = 4
 
 
@@ -29,27 +29,25 @@ class CruelState:
 
 def create_initial_state() -> CruelState:
     pack = Pack()
-    # Do NOT shuffle — Cruel uses a sorted/ordered deal that produces a
-    # deterministic initial layout.  We shuffle so every game is different,
-    # matching common implementations such as Aisleriot.
     pack.shuffle(times=3)
 
     foundations = tuple(Pile() for _ in range(4))
     tableau = tuple(Pile() for _ in range(TABLEAU_COLS))
 
-    cards = []
+    # Extract Aces first and place them on foundations.
+    non_aces = []
     while len(pack) > 0:
         card = pack.deal()
         if card.facedown:
             card.flip()
-        cards.append(card)
+        if card.value == 0:  # Ace
+            foundations[len([f for f in foundations if len(f) > 0])].append(card)
+        else:
+            non_aces.append(card)
 
-    # Deal into 13 piles of 4 cards each (52 cards total), all face-up.
-    for idx, card in enumerate(cards):
+    # Deal remaining 48 cards into 12 piles of 4, all face-up.
+    for idx, card in enumerate(non_aces):
         tableau[idx // PILE_SIZE].append(card)
-
-    # Auto-move aces to foundations.
-    _auto_move_to_foundations(foundations, tuple(tableau))
 
     return CruelState(foundations=foundations, tableau=tuple(tableau))
 
@@ -194,14 +192,14 @@ class CruelWindow(Gtk.ApplicationWindow):
             foundation_row.append(self._build_foundation_pile(idx, pile))
         outer.append(foundation_row)
 
-        # Tableau: two rows of 7 and 6 columns
+        # Tableau: two rows of 6 columns each
         top_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=TABLEAU_COL_GAP)
-        for col in range(7):
+        for col in range(6):
             top_row.append(self._build_tableau_col(col))
         outer.append(top_row)
 
         bottom_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=TABLEAU_COL_GAP)
-        for col in range(7, 13):
+        for col in range(6, 12):
             bottom_row.append(self._build_tableau_col(col))
         outer.append(bottom_row)
 
