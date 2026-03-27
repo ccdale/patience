@@ -19,6 +19,7 @@ def build_named_pile(
     title: str,
     pile: Pile,
     card_builder: Callable[[Card | None], Gtk.Widget],
+    on_click: Callable[[], None] | None = None,
 ) -> Gtk.Widget:
     frame = Gtk.Frame()
     frame.set_size_request(CARD_W, -1)
@@ -43,6 +44,10 @@ def build_named_pile(
     box.append(count)
 
     frame.set_child(box)
+    if on_click is not None:
+        click = Gtk.GestureClick.new()
+        click.connect("released", lambda *_args: on_click())
+        frame.add_controller(click)
     return frame
 
 
@@ -50,6 +55,7 @@ def build_tableau_column(
     index: int,
     pile: Pile,
     card_builder: Callable[[Card | None], Gtk.Widget],
+    on_click: Callable[[float], None] | None = None,
 ) -> Gtk.Widget:
     frame = Gtk.Frame()
 
@@ -76,6 +82,11 @@ def build_tableau_column(
 
     total_height = y + CARD_H
     fixed.set_size_request(CARD_W, total_height)
+
+    if on_click is not None:
+        click = Gtk.GestureClick.new()
+        click.connect("released", lambda _gesture, _n_press, _x, y_pos: on_click(y_pos))
+        fixed.add_controller(click)
 
     outer.append(fixed)
     frame.set_child(outer)
