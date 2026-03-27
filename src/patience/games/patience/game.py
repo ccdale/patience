@@ -6,8 +6,9 @@ from ccacards.pack import Pack
 from ccacards.pile import Pile
 
 gi.require_version("Gtk", "4.0")
+gi.require_version("Gdk", "4.0")
 
-from gi.repository import Gtk  # noqa: E402
+from gi.repository import Gdk, Gtk  # noqa: E402
 
 from patience.ui.cards import build_card_widget, resolve_card_data_dir
 from patience.ui.piles import TABLEAU_COL_GAP, build_named_pile, build_tableau_column
@@ -125,6 +126,7 @@ class PatienceWindow(Gtk.ApplicationWindow):
         self._state = create_initial_state()
         self._card_data_dir = resolve_card_data_dir()
         self._selection: Selection | None = None
+        self._install_selection_css()
 
         root = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
         root.set_margin_top(18)
@@ -147,6 +149,7 @@ class PatienceWindow(Gtk.ApplicationWindow):
         root.append(self._board)
 
         self._refresh_board()
+
         self.set_child(root)
 
     def _refresh_board(self) -> None:
@@ -165,14 +168,26 @@ class PatienceWindow(Gtk.ApplicationWindow):
         grid.set_column_homogeneous(False)
 
         grid.attach(
-            build_named_pile("Stock", self._state.stock, self._card_widget, on_click=self._on_stock_clicked),
+            build_named_pile(
+                "Stock",
+                self._state.stock,
+                self._card_widget,
+                on_click=self._on_stock_clicked,
+                selected=False,
+            ),
             0,
             0,
             1,
             1,
         )
         grid.attach(
-            build_named_pile("Waste", self._state.waste, self._card_widget, on_click=self._on_waste_clicked),
+            build_named_pile(
+                "Waste",
+                self._state.waste,
+                self._card_widget,
+                on_click=self._on_waste_clicked,
+                selected=self._is_selected_named("waste", 0),
+            ),
             1,
             0,
             1,
@@ -185,7 +200,10 @@ class PatienceWindow(Gtk.ApplicationWindow):
                     f"Foundation {idx + 1}",
                     pile,
                     self._card_widget,
-                    on_click=lambda foundation_idx=idx: self._on_foundation_clicked(foundation_idx),
+                    on_click=lambda foundation_idx=idx: self._on_foundation_clicked(
+                        foundation_idx
+                    ),
+                    selected=self._is_selected_named("foundation", idx),
                 ),
                 idx + 3,
                 0,
@@ -199,7 +217,10 @@ class PatienceWindow(Gtk.ApplicationWindow):
                     column + 1,
                     pile,
                     self._card_widget,
-                    on_click=lambda y_pos, tableau_idx=column: self._on_tableau_clicked(tableau_idx, y_pos),
+                    on_click=lambda y_pos, tableau_idx=column: self._on_tableau_clicked(
+                        tableau_idx, y_pos
+                    ),
+                    selected_start_index=self._selected_tableau_start(column),
                 ),
                 column,
                 1,
@@ -211,6 +232,42 @@ class PatienceWindow(Gtk.ApplicationWindow):
 
     def _card_widget(self, card: Card | None) -> Gtk.Widget:
         return build_card_widget(card, self._card_data_dir)
+
+    def _install_selection_css(self) -> None:
+        css = Gtk.CssProvider()
+        css.load_from_data(
+            b"""
+            .selected-pile {
+                border: 2px solid #2a7fff;
+                border-radius: 8px;
+                background: alpha(#2a7fff, 0.08);
+            }
+            .selected-card {
+                outline: 2px solid #2a7fff;
+                outline-offset: -2px;
+                border-radius: 6px;
+            }
+            """
+        )
+        display = Gdk.Display.get_default()
+        if display is not None:
+            Gtk.StyleContext.add_provider_for_display(
+                display,
+                css,
+                Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION,
+            )
+
+    def _is_selected_named(self, source: str, pile_index: int) -> bool:
+        selection = self._selection
+        return bool(selection and selection.source == source and selection.pile_index == pile_index)
+
+    def _selected_tableau_start(self, pile_index: int) -> int | None:
+        selection = self._selection
+        if selection is None:
+            return None
+        if selection.source != "tableau" or selection.pile_index != pile_index:
+            return None
+        return selection.start_index
 
     def _on_stock_clicked(self) -> None:
         changed = draw_three_from_stock(self._state.stock, self._state.waste)
@@ -389,7 +446,7 @@ class PatienceWindow(Gtk.ApplicationWindow):
             pile_cards = self._state.tableau[selection.pile_index].cards
             if selection.start_index is None:
                 return []
-            return list(pile_cards[selection.start_index:])
+            return list(pile_cards[selection.start_index :])
 
         return []
 

@@ -20,9 +20,12 @@ def build_named_pile(
     pile: Pile,
     card_builder: Callable[[Card | None], Gtk.Widget],
     on_click: Callable[[], None] | None = None,
+    selected: bool = False,
 ) -> Gtk.Widget:
     frame = Gtk.Frame()
     frame.set_size_request(CARD_W, -1)
+    if selected:
+        frame.add_css_class("selected-pile")
 
     box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
     box.set_margin_top(8)
@@ -56,8 +59,11 @@ def build_tableau_column(
     pile: Pile,
     card_builder: Callable[[Card | None], Gtk.Widget],
     on_click: Callable[[float], None] | None = None,
+    selected_start_index: int | None = None,
 ) -> Gtk.Widget:
     frame = Gtk.Frame()
+    if selected_start_index is not None:
+        frame.add_css_class("selected-pile")
 
     outer = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
     outer.set_margin_top(8)
@@ -76,6 +82,8 @@ def build_tableau_column(
     y = 0
     for i, card in enumerate(cards):
         widget = card_builder(card)
+        if selected_start_index is not None and i >= selected_start_index:
+            widget.add_css_class("selected-card")
         fixed.put(widget, 0, y)
         if i < len(cards) - 1:
             y += FACE_DOWN_OVERLAP if card.facedown else FACE_UP_OVERLAP
