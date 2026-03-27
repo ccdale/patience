@@ -7,8 +7,14 @@ from ccacards.pack import Pack
 from ccacards.pile import Pile
 
 gi.require_version("Gtk", "4.0")
+gi.require_version("GdkPixbuf", "2.0")
 
-from gi.repository import Gtk  # noqa: E402
+from gi.repository import GdkPixbuf, Gtk  # noqa: E402
+
+CARD_W = 90
+CARD_H = 126   # proportional to natural 537×750 px
+FACE_DOWN_OVERLAP = 22   # px of a face-down card visible beneath the next
+FACE_UP_OVERLAP = 38     # px of a face-up card visible beneath the next
 
 
 @dataclass(frozen=True)
@@ -112,23 +118,32 @@ class PatienceWindow(Gtk.ApplicationWindow):
     def _build_tableau_column(self, index: int, pile: Pile) -> Gtk.Widget:
         frame = Gtk.Frame()
 
-        column = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
-        column.set_margin_top(8)
-        column.set_margin_bottom(8)
-        column.set_margin_start(8)
-        column.set_margin_end(8)
+        outer = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+        outer.set_margin_top(8)
+        outer.set_margin_bottom(8)
+        outer.set_margin_start(8)
+        outer.set_margin_end(8)
 
         label = Gtk.Label(label=f"T{index}")
         label.add_css_class("caption")
         label.set_halign(Gtk.Align.START)
-        column.append(label)
+        outer.append(label)
 
         cards = list(pile.cards)
-        start = max(0, len(cards) - 5)
-        for card in cards[start:]:
-            column.append(self._build_card_widget(card, stacked=True))
+        fixed = Gtk.Fixed()
 
-        frame.set_child(column)
+        y = 0
+        for i, card in enumerate(cards):
+            widget = self._build_card_widget(card)
+            fixed.put(widget, 0, y)
+            if i < len(cards) - 1:
+                y += FACE_DOWN_OVERLAP if card.facedown else FACE_UP_OVERLAP
+
+        total_height = y + CARD_H
+        fixed.set_size_request(CARD_W, total_height)
+
+        outer.append(fixed)
+        frame.set_child(outer)
         return frame
 
     def _build_named_pile(self, title: str, pile: Pile) -> Gtk.Widget:
@@ -146,7 +161,7 @@ class PatienceWindow(Gtk.ApplicationWindow):
         box.append(label)
 
         card = pile.peek()
-        box.append(self._build_card_widget(card, stacked=False))
+        box.append(self._build_card_widget(card))
 
         count = Gtk.Label(label=f"{len(pile)} cards")
         count.add_css_class("dim-label")
@@ -157,20 +172,19 @@ class PatienceWindow(Gtk.ApplicationWindow):
         frame.set_child(box)
         return frame
 
-    def _build_card_widget(self, card: Card | None, stacked: bool) -> Gtk.Widget:
+    def _build_card_widget(self, card: Card | None) -> Gtk.Widget:
         image_path = self._resolve_card_image_path(card)
         if image_path is not None:
-            image = Gtk.Image.new_from_file(str(image_path))
-            image.set_pixel_size(90 if stacked else 110)
-            return image
+            pixbuf = GdkPixbuf.Pixbuf.new_from_file_at_scale(
+                str(image_path), width=CARD_W, height=CARD_H, preserve_aspect_ratio=False
+            )
+            return Gtk.Image.new_from_pixbuf(pixbuf)
 
         fallback = Gtk.Box()
-        fallback.set_size_request(90 if stacked else 110, 150 if stacked else 170)
+        fallback.set_size_request(CARD_W, CARD_H)
         fallback.add_css_class("card")
         fallback.add_css_class("frame")
-
-        text = "Empty" if card is None else str(card)
-        label = Gtk.Label(label=text)
+        label = Gtk.Label(label="Empty" if card is None else str(card))
         label.set_wrap(True)
         fallback.append(label)
         return fallback
