@@ -1,0 +1,1 @@
+"""Game registration package."""
