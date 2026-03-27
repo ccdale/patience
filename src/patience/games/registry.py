@@ -1,6 +1,5 @@
 from dataclasses import dataclass
 
-
 GAME_ICON_FILENAME = "game-icon.svg"
 
 
@@ -16,9 +15,9 @@ class GameSpec:
 
 GAME_REGISTRY: tuple[GameSpec, ...] = (
     GameSpec(
-        id="klondike",
-        title="Klondike",
-        module="patience.games.klondike",
+        id="patience",
+        title="Patience",
+        module="patience.games.patience",
         available=True,
     ),
     GameSpec(

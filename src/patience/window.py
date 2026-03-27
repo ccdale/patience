@@ -1,6 +1,7 @@
-import gi
 import importlib
 from importlib import resources
+
+import gi
 
 from patience.games.registry import GAME_ICON_FILENAME, GAME_REGISTRY, GameSpec
 
@@ -120,7 +121,9 @@ class LauncherWindow(Gtk.ApplicationWindow):
 
         launch = getattr(game_module, "launch", None)
         if not callable(launch):
-            self._show_info_dialog(f"{game.module} does not define launch(parent_window).")
+            self._show_info_dialog(
+                f"{game.module} does not define launch(parent_window)."
+            )
             return
 
         launch(self)

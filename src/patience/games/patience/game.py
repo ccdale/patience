@@ -5,10 +5,10 @@ gi.require_version("Gtk", "4.0")
 from gi.repository import Gtk  # noqa: E402
 
 
-class KlondikeWindow(Gtk.ApplicationWindow):
+class PatienceWindow(Gtk.ApplicationWindow):
     def __init__(self, app: Gtk.Application, parent: Gtk.Window | None = None) -> None:
         super().__init__(application=app)
-        self.set_title("Klondike")
+        self.set_title("Patience")
         self.set_default_size(900, 650)
 
         if parent is not None:
@@ -20,7 +20,7 @@ class KlondikeWindow(Gtk.ApplicationWindow):
         root.set_margin_start(20)
         root.set_margin_end(20)
 
-        title = Gtk.Label(label="Klondike")
+        title = Gtk.Label(label="Patience")
         title.add_css_class("title-2")
         title.set_halign(Gtk.Align.START)
 
@@ -41,5 +41,5 @@ def launch(parent_window: Gtk.Window) -> None:
     if app is None:
         raise RuntimeError("Parent window has no associated GTK application.")
 
-    game_window = KlondikeWindow(app=app, parent=parent_window)
+    game_window = PatienceWindow(app=app, parent=parent_window)
     game_window.present()
