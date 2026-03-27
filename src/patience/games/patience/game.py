@@ -7,9 +7,8 @@ from ccacards.pack import Pack
 from ccacards.pile import Pile
 
 gi.require_version("Gtk", "4.0")
-gi.require_version("GdkPixbuf", "2.0")
 
-from gi.repository import GdkPixbuf, Gtk  # noqa: E402
+from gi.repository import Gtk  # noqa: E402
 
 CARD_W = 90
 CARD_H = 126   # proportional to natural 537×750 px
@@ -175,10 +174,10 @@ class PatienceWindow(Gtk.ApplicationWindow):
     def _build_card_widget(self, card: Card | None) -> Gtk.Widget:
         image_path = self._resolve_card_image_path(card)
         if image_path is not None:
-            pixbuf = GdkPixbuf.Pixbuf.new_from_file_at_scale(
-                str(image_path), width=CARD_W, height=CARD_H, preserve_aspect_ratio=False
-            )
-            return Gtk.Image.new_from_pixbuf(pixbuf)
+            picture = Gtk.Picture.new_for_filename(str(image_path))
+            picture.set_size_request(CARD_W, CARD_H)
+            picture.set_content_fit(Gtk.ContentFit.FILL)
+            return picture
 
         fallback = Gtk.Box()
         fallback.set_size_request(CARD_W, CARD_H)
