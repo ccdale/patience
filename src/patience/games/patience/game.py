@@ -2,7 +2,6 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import gi
-import platformdirs
 from ccacards.card import Card
 from ccacards.pack import Pack
 from ccacards.pile import Pile
@@ -177,23 +176,16 @@ class PatienceWindow(Gtk.ApplicationWindow):
         return fallback
 
     def _resolve_card_data_dir(self) -> Path:
-        # ccacards stores images in the platform user-data dir under its own name.
-        # We cannot rely on ccacards.__carddir__ here because its _find_pyproject
-        # helper walks up the directory tree and would pick up the patience
-        # pyproject.toml instead, giving the wrong app name.
-        return Path(platformdirs.user_data_dir("ccacards"))
+        return Path(Card(1).imagefile).parent
 
     def _resolve_card_image_path(self, card: Card | None) -> Path | None:
         if card is None:
-            filename = "0.png"
+            image_path = self._card_data_dir / "0.png"
         elif card.facedown:
-            filename = "back.png"
+            image_path = self._card_data_dir / "back.png"
         else:
-            # card.imagefile is Path(__carddir__, "{index}.png"); .name gives
-            # the correct filename regardless of what __carddir__ resolved to.
-            filename = Path(card.imagefile).name
+            image_path = card.imagefile
 
-        image_path = self._card_data_dir / filename
         return image_path if image_path.is_file() else None
 
 
