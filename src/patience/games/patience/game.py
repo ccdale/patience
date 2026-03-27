@@ -8,10 +8,8 @@ gi.require_version("Gtk", "4.0")
 
 from gi.repository import Gtk  # noqa: E402
 
-from patience.ui.cards import build_card_widget, resolve_card_data_dir  # noqa: E402
-from patience.ui.piles import build_named_pile, build_tableau_column  # noqa: E402
-
-COLUMN_GAP = 14
+from patience.ui.piles import TABLEAU_COL_GAP, build_named_pile, build_tableau_column
+from patience.ui.cards import build_card_widget, resolve_card_data_dir
 
 
 @dataclass(frozen=True)
@@ -56,7 +54,7 @@ class PatienceWindow(Gtk.ApplicationWindow):
     def __init__(self, app: Gtk.Application, parent: Gtk.Window | None = None) -> None:
         super().__init__(application=app)
         self.set_title("Patience")
-        self.set_default_size(1120, 760)
+        self.set_default_size(756, 900)
 
         if parent is not None:
             self.set_transient_for(parent)
@@ -75,15 +73,18 @@ class PatienceWindow(Gtk.ApplicationWindow):
         title.set_halign(Gtk.Align.START)
         root.append(title)
 
-        root.append(self._build_board_grid())
+        board = self._build_board_grid()
+        board.set_halign(Gtk.Align.START)
+        root.append(board)
+
         self.set_child(root)
 
     def _build_board_grid(self) -> Gtk.Widget:
-        # Shared 7-column grid for alignment:
+        # Shared 7-column grid:
         # top:    Stock(0), Waste(1), gap(2), F1(3), F2(4), F3(5), F4(6)
         # bottom: T1(0),    T2(1),    T3(2),  T4(3), T5(4), T6(5), T7(6)
-        grid = Gtk.Grid(column_spacing=COLUMN_GAP, row_spacing=14)
-        grid.set_column_homogeneous(True)
+        grid = Gtk.Grid(column_spacing=TABLEAU_COL_GAP, row_spacing=14)
+        grid.set_column_homogeneous(False)
 
         grid.attach(build_named_pile("Stock", self._state.stock, self._card_widget), 0, 0, 1, 1)
         grid.attach(build_named_pile("Waste", self._state.waste, self._card_widget), 1, 0, 1, 1)

@@ -10,8 +10,9 @@ from gi.repository import Gtk  # noqa: E402
 
 from patience.ui.cards import CARD_H, CARD_W  # noqa: E402
 
+TABLEAU_COL_GAP = 14
 FACE_DOWN_OVERLAP = 22  # px of a face-down card visible beneath the next
-FACE_UP_OVERLAP = 38    # px of a face-up card visible beneath the next
+FACE_UP_OVERLAP = 38  # px of a face-up card visible beneath the next
 
 
 def build_named_pile(
@@ -20,6 +21,7 @@ def build_named_pile(
     card_builder: Callable[[Card | None], Gtk.Widget],
 ) -> Gtk.Widget:
     frame = Gtk.Frame()
+    frame.set_size_request(CARD_W, -1)
 
     box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
     box.set_margin_top(8)
