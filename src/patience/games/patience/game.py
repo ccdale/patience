@@ -134,10 +134,19 @@ class PatienceWindow(Gtk.ApplicationWindow):
         root.set_margin_start(18)
         root.set_margin_end(18)
 
+        header = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+
         title = Gtk.Label(label="Patience")
         title.add_css_class("title-2")
         title.set_halign(Gtk.Align.START)
-        root.append(title)
+        title.set_hexpand(True)
+        header.append(title)
+
+        new_game_button = Gtk.Button(label="New Game")
+        new_game_button.connect("clicked", self._on_new_game_clicked)
+        header.append(new_game_button)
+
+        root.append(header)
 
         self._status = Gtk.Label(label="Draw-3, unlimited redeals, auto-foundation")
         self._status.add_css_class("dim-label")
@@ -233,6 +242,12 @@ class PatienceWindow(Gtk.ApplicationWindow):
     def _card_widget(self, card: Card | None) -> Gtk.Widget:
         return build_card_widget(card, self._card_data_dir)
 
+    def _on_new_game_clicked(self, _button: Gtk.Button) -> None:
+        self._state = create_initial_state()
+        self._selection = None
+        self._set_status("Draw-3, unlimited redeals, auto-foundation")
+        self._refresh_board()
+
     def _install_selection_css(self) -> None:
         css = Gtk.CssProvider()
         css.load_from_data(
@@ -259,7 +274,11 @@ class PatienceWindow(Gtk.ApplicationWindow):
 
     def _is_selected_named(self, source: str, pile_index: int) -> bool:
         selection = self._selection
-        return bool(selection and selection.source == source and selection.pile_index == pile_index)
+        return bool(
+            selection
+            and selection.source == source
+            and selection.pile_index == pile_index
+        )
 
     def _selected_tableau_start(self, pile_index: int) -> int | None:
         selection = self._selection
