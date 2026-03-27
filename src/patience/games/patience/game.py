@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import gi
-
+import platformdirs
 from ccacards.card import Card
 from ccacards.pack import Pack
 from ccacards.pile import Pile
@@ -60,7 +60,7 @@ class PatienceWindow(Gtk.ApplicationWindow):
             self.set_transient_for(parent)
 
         self._state = create_initial_state()
-        self._card_data_dir = self._resolve_card_data_dir()
+        self._card_data_dir: Path = self._resolve_card_data_dir()
 
         root = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
         root.set_margin_top(18)
@@ -98,7 +98,9 @@ class PatienceWindow(Gtk.ApplicationWindow):
         row.attach(spacer, 2, 0, 1, 1)
 
         for idx, pile in enumerate(self._state.foundations, start=3):
-            row.attach(self._build_named_pile(f"Foundation {idx - 2}", pile), idx, 0, 1, 1)
+            row.attach(
+                self._build_named_pile(f"Foundation {idx - 2}", pile), idx, 0, 1, 1
+            )
 
         return row
 
@@ -174,34 +176,25 @@ class PatienceWindow(Gtk.ApplicationWindow):
         fallback.append(label)
         return fallback
 
-    def _resolve_card_data_dir(self) -> Path | None:
-        direct_path = Path(Card(1).imagefile).parent
-        if (direct_path / "back.png").is_file():
-            return direct_path
-
-        try:
-            import ccacards
-        except Exception:
-            return None
-
-        package_root = Path(ccacards.__file__).resolve().parent.parent
-        data_dir = package_root / "data"
-        if (data_dir / "back.png").is_file():
-            return data_dir
-        return None
+    def _resolve_card_data_dir(self) -> Path:
+        # ccacards stores images in the platform user-data dir under its own name.
+        # We cannot rely on ccacards.__carddir__ here because its _find_pyproject
+        # helper walks up the directory tree and would pick up the patience
+        # pyproject.toml instead, giving the wrong app name.
+        return Path(platformdirs.user_data_dir("ccacards"))
 
     def _resolve_card_image_path(self, card: Card | None) -> Path | None:
-        if self._card_data_dir is None:
-            return None
-
-        filename = "0.png"
-        if card is not None:
-            filename = "back.png" if card.facedown else Path(card.imagefile).name
+        if card is None:
+            filename = "0.png"
+        elif card.facedown:
+            filename = "back.png"
+        else:
+            # card.imagefile is Path(__carddir__, "{index}.png"); .name gives
+            # the correct filename regardless of what __carddir__ resolved to.
+            filename = Path(card.imagefile).name
 
         image_path = self._card_data_dir / filename
-        if image_path.is_file():
-            return image_path
-        return None
+        return image_path if image_path.is_file() else None
 
 
 def launch(parent_window: Gtk.Window) -> None:
