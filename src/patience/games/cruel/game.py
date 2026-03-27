@@ -106,6 +106,28 @@ def _collect_auto_moves(
     return moves
 
 
+def _has_valid_moves(
+    foundations: tuple[Pile, ...],
+    tableau: tuple[Pile, ...],
+) -> bool:
+    """Return True if there is at least one legal move available, including
+    auto-moves to foundations and tableau-to-tableau moves."""
+    tops = [p.peek() for p in tableau]
+    found_tops = [f.peek() for f in foundations]
+    for card in tops:
+        if card is None:
+            continue
+        # Can go to a foundation?
+        for ft in found_tops:
+            if can_place_on_foundation(card, ft):
+                return True
+        # Can go to another tableau pile?
+        for other in tops:
+            if other is not None and other is not card and can_place_on_tableau(card, other):
+                return True
+    return False
+
+
 def collect_and_redeal(tableau: tuple[Pile, ...]) -> None:
     """Gather all tableau cards left→right, top (last dealt) first within each
     pile (i.e. bottom-to-top as dealt, so the visual order is preserved on
@@ -281,6 +303,10 @@ class CruelWindow(Gtk.ApplicationWindow):
     def _on_redeal_clicked(self, _button: Gtk.Button) -> None:
         collect_and_redeal(self._state.tableau)
         self._selection = None
+        if not _has_valid_moves(self._state.foundations, self._state.tableau):
+            self._set_status("No valid moves — game over.")
+            self._refresh_board()
+            return
         self._set_status("Redealt.")
         self._refresh_board()
         moves = _collect_auto_moves(self._state.foundations, self._state.tableau)
