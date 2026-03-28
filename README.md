@@ -2,6 +2,10 @@
 
 A GTK4 solitaire application featuring multiple classic card games.
 
+## Documentation
+
+Code-reading and architecture notes are available in the [Documentation Index](docs/index.md).
+
 ## Games
 
 ### Patience (Klondike)
