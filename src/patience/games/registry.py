@@ -27,6 +27,12 @@ GAME_REGISTRY: tuple[GameSpec, ...] = (
         available=True,
     ),
     GameSpec(
+        id="demon",
+        title="Demon",
+        module="patience.games.demon",
+        available=True,
+    ),
+    GameSpec(
         id="freecell",
         title="FreeCell",
         module="patience.games.freecell",

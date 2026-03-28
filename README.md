@@ -10,6 +10,9 @@ The classic solitaire game. Deal from the stock pile (one or three cards at a ti
 ### Cruel
 A variant using all 52 cards. 12 tableau piles of 4 cards each, with aces automatically moved to foundations. Build tableau sequences in descending order of the same suit. Redeal to regroup when stuck.
 
+### Demon
+The British game also known as Canfield. Start with a 13-card reserve, a base card that sets the foundation rank, four tableau piles, and a draw-3 stock. Build tableau piles down by alternating colors with wraparound and build foundations up by suit from the base rank.
+
 ## Architecture
 
 - `patience.app`: GTK `Application` bootstrap
@@ -39,6 +42,33 @@ Run tests:
 ```bash
 uv run pytest -q
 ```
+
+## Adding Games
+
+New games are designed as small packages under `src/patience/games/`.
+
+1. Create a package directory such as `src/patience/games/demon/`.
+2. Add `game.py` with the game state, pure rule helpers, a GTK window class, and a `launch(parent_window)` entry point.
+3. Add `__init__.py` that re-exports `launch`, because the launcher imports the package module from the registry.
+4. Add a `game-icon.svg` file in the package. The launcher looks for that exact filename via `importlib.resources`.
+5. Register the game in `patience.games.registry` with a unique `id`, user-facing `title`, module path, and `available=True` once it is launchable.
+6. Add tests in `tests/test_<game>_game.py` for the setup and core move rules.
+7. Update this README with a short player-facing description of the new game.
+
+Implementation notes:
+
+- Card logic is built on `ccacards`, especially `Card`, `Pack`, and `Pile`.
+- Shared GTK card and pile widgets live in `patience.ui.cards` and `patience.ui.piles`.
+- If the game needs assets beyond code, keep them inside the game package so wheel builds can include them naturally.
+- Keep rule logic testable outside the window class where possible; existing games use pure helper functions for move validation and dealing.
+
+Contributor checklist:
+
+- Confirm the new package exports `launch` and includes `game-icon.svg`.
+- Make sure the registry entry points at the package module, not directly at `game.py`.
+- Keep all card setup and move rules expressed in terms of `ccacards` primitives so tests stay simple.
+- Add or update README text for both player-facing rules and contributor-facing implementation details.
+- Run at least the new game's tests plus `tests/test_registry.py` before considering the game wired up.
 
 ## Attribution
 
