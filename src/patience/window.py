@@ -15,6 +15,7 @@ class LauncherWindow(Gtk.ApplicationWindow):
         super().__init__(application=app)
         self.set_title("Patience")
         self.set_default_size(840, 560)
+        self.add_css_class("table-window")
 
         root = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
         root.set_margin_top(18)

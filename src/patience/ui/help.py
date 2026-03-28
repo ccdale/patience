@@ -59,6 +59,7 @@ def build_rules_panel(text: str, title: str = "Rules") -> Gtk.Widget:
 
     icon = Gtk.Image.new_from_icon_name("dialog-information-symbolic")
     icon.set_pixel_size(16)
+    icon.add_css_class("rules-panel-icon")
     header.append(icon)
 
     heading = Gtk.Label(label=title)

@@ -106,6 +106,7 @@ class FreeCellWindow(Gtk.ApplicationWindow):
         super().__init__(application=app)
         self.set_title("FreeCell")
         self.set_default_size(1280, 920)
+        self.add_css_class("table-window")
 
         if parent is not None:
             self.set_transient_for(parent)

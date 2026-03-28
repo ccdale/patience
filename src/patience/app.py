@@ -4,6 +4,7 @@ gi.require_version("Gtk", "4.0")
 
 from gi.repository import Gtk
 
+from patience.ui.theme import install_app_theme_css
 from patience.window import LauncherWindow
 
 
@@ -19,5 +20,6 @@ class PatienceApplication(Gtk.Application):
 
 
 def main() -> int:
+    install_app_theme_css()
     app = PatienceApplication()
     return app.run(None)

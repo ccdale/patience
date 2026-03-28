@@ -24,6 +24,7 @@ def build_named_pile(
 ) -> Gtk.Widget:
     frame = Gtk.Frame()
     frame.set_size_request(CARD_W, -1)
+    frame.add_css_class("pile-frame")
     if selected:
         frame.add_css_class("selected-pile")
 
@@ -62,6 +63,7 @@ def build_tableau_column(
     selected_start_index: int | None = None,
 ) -> Gtk.Widget:
     frame = Gtk.Frame()
+    frame.add_css_class("pile-frame")
     if selected_start_index is not None:
         frame.add_css_class("selected-pile")
 
