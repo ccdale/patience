@@ -13,6 +13,9 @@ A variant using all 52 cards. 12 tableau piles of 4 cards each, with aces automa
 ### Demon
 The British game also known as Canfield. Start with a 13-card reserve, a base card that sets the foundation rank, four tableau piles, and a draw-3 stock. Build tableau piles down by alternating colors with wraparound and build foundations up by suit from the base rank.
 
+### FreeCell
+An open-information solitaire with four free cells, four foundations, and eight tableau columns. Build tableau piles down by alternating colors, use free cells and empty columns as temporary storage, and move all cards to the foundations.
+
 ## Architecture
 
 - `patience.app`: GTK `Application` bootstrap

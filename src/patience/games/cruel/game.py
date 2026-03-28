@@ -11,6 +11,7 @@ gi.require_version("Gtk", "4.0")
 from gi.repository import Gdk, GLib, Gtk  # noqa: E402
 
 from patience.ui.cards import CARD_W, build_card_widget, resolve_card_data_dir
+from patience.ui.help import build_rules_panel
 from patience.ui.piles import TABLEAU_COL_GAP, build_named_pile
 
 TABLEAU_COLS = 12
@@ -203,7 +204,15 @@ class CruelWindow(Gtk.ApplicationWindow):
         self._status.set_halign(Gtk.Align.START)
         root.append(self._status)
 
-        root.append(self._build_help_panel())
+        root.append(
+            build_rules_panel(
+                "Aces begin on the foundations automatically.\n"
+                "Tableau: move only the top card of a pile, building down by the same suit.\n"
+                "Empty tableau piles cannot be filled directly.\n"
+                "Use Redeal to gather all tableau cards and redeal them into piles of four.\n"
+                "Cards that can move to foundations are resolved automatically after moves and redeals."
+            )
+        )
 
         self._board = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         self._board.set_halign(Gtk.Align.START)
@@ -251,33 +260,6 @@ class CruelWindow(Gtk.ApplicationWindow):
         outer.append(bottom_row)
 
         return outer
-
-    def _build_help_panel(self) -> Gtk.Widget:
-        expander = Gtk.Expander(label="Rules")
-        expander.set_expanded(False)
-
-        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
-        box.set_margin_top(8)
-        box.set_margin_bottom(8)
-        box.set_margin_start(12)
-        box.set_margin_end(12)
-
-        help_text = Gtk.Label(
-            label=(
-                "Aces begin on the foundations automatically.\n"
-                "Tableau: move only the top card of a pile, building down by the same suit.\n"
-                "Empty tableau piles cannot be filled directly.\n"
-                "Use Redeal to gather all tableau cards and redeal them into piles of four.\n"
-                "Cards that can move to foundations are resolved automatically after moves and redeals."
-            )
-        )
-        help_text.set_wrap(True)
-        help_text.set_halign(Gtk.Align.START)
-        help_text.set_xalign(0)
-
-        box.append(help_text)
-        expander.set_child(box)
-        return expander
 
     def _build_foundation_pile(self, idx: int, pile: Pile) -> Gtk.Widget:
         frame = Gtk.Frame()

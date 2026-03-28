@@ -12,41 +12,28 @@ from gi.repository import Gdk, Gtk  # noqa: E402
 
 from patience.ui.cards import build_card_widget, resolve_card_data_dir
 from patience.ui.help import build_rules_panel
-from patience.ui.piles import TABLEAU_COL_GAP, build_named_pile, build_tableau_column
-
-DRAW_COUNT = 3
-RESERVE_SIZE = 13
-TABLEAU_COLS = 4
-RANK_NAMES = (
-    "Ace",
-    "2",
-    "3",
-    "4",
-    "5",
-    "6",
-    "7",
-    "8",
-    "9",
-    "10",
-    "Jack",
-    "Queen",
-    "King",
+from patience.ui.piles import (
+    FACE_UP_OVERLAP,
+    TABLEAU_COL_GAP,
+    build_named_pile,
+    build_tableau_column,
 )
+
+FREE_CELLS = 4
+FOUNDATIONS = 4
+TABLEAU_COLS = 8
 
 
 @dataclass(frozen=True)
-class DemonState:
-    stock: Pile
-    waste: Pile
-    reserve: Pile
+class FreeCellState:
+    free_cells: tuple[Pile, Pile, Pile, Pile]
     foundations: tuple[Pile, Pile, Pile, Pile]
-    tableau: tuple[Pile, Pile, Pile, Pile]
-    foundation_base_rank: int
+    tableau: tuple[Pile, ...]
 
 
 @dataclass
 class Selection:
-    source: str  # "reserve", "waste", "foundation", "tableau"
+    source: str  # "freecell", "foundation", "tableau"
     pile_index: int
     start_index: int | None = None
 
@@ -55,24 +42,16 @@ def is_red(card: Card) -> bool:
     return card.suit in {"Hearts", "Diamonds"}
 
 
-def can_place_on_foundation(
-    card: Card, foundation_top: Card | None, foundation_base_rank: int
-) -> bool:
+def can_place_on_foundation(card: Card, foundation_top: Card | None) -> bool:
     if foundation_top is None:
-        return card.value == foundation_base_rank
-    return (
-        card.suit == foundation_top.suit
-        and card.value == (foundation_top.value + 1) % 13
-    )
+        return card.value == 0
+    return card.suit == foundation_top.suit and card.value == foundation_top.value + 1
 
 
 def can_place_on_tableau(card: Card, tableau_top: Card | None) -> bool:
     if tableau_top is None:
-        return False
-    return (
-        is_red(card) != is_red(tableau_top)
-        and card.value == (tableau_top.value - 1) % 13
-    )
+        return True
+    return is_red(card) != is_red(tableau_top) and card.value == tableau_top.value - 1
 
 
 def is_valid_tableau_run(cards: list[Card]) -> bool:
@@ -81,85 +60,52 @@ def is_valid_tableau_run(cards: list[Card]) -> bool:
     if any(card.facedown for card in cards):
         return False
     for idx in range(1, len(cards)):
-        if not can_place_on_tableau(cards[idx], cards[idx - 1]):
+        prev = cards[idx - 1]
+        cur = cards[idx]
+        if not can_place_on_tableau(cur, prev):
             return False
     return True
 
 
-def draw_three_from_stock(stock: Pile, waste: Pile) -> bool:
-    if len(stock) == 0:
-        return False
-
-    for _ in range(min(DRAW_COUNT, len(stock))):
-        card = stock.pop()
-        if card.facedown:
-            card.flip()
-        waste.append(card)
-    return True
+def max_movable_cards(
+    empty_free_cells: int, empty_tableau: int, destination_is_empty: bool
+) -> int:
+    usable_empty_tableau = empty_tableau - 1 if destination_is_empty else empty_tableau
+    if usable_empty_tableau < 0:
+        usable_empty_tableau = 0
+    return (empty_free_cells + 1) * (2**usable_empty_tableau)
 
 
-def redeal_waste_to_stock(stock: Pile, waste: Pile) -> bool:
-    if len(stock) != 0 or len(waste) == 0:
-        return False
-
-    while len(waste) > 0:
-        card = waste.pop()
-        if not card.facedown:
-            card.flip()
-        stock.append(card)
-    return True
-
-
-def create_initial_state() -> DemonState:
+def create_initial_state() -> FreeCellState:
     pack = Pack()
     pack.shuffle(times=3)
 
-    stock = Pile()
-    waste = Pile()
-    reserve = Pile()
-    foundations = tuple(Pile() for _ in range(4))
+    free_cells = tuple(Pile() for _ in range(FREE_CELLS))
+    foundations = tuple(Pile() for _ in range(FOUNDATIONS))
     tableau = tuple(Pile() for _ in range(TABLEAU_COLS))
 
-    for reserve_index in range(RESERVE_SIZE):
-        card = pack.deal()
-        if reserve_index < RESERVE_SIZE - 1 and not card.facedown:
-            card.flip()
-        if reserve_index == RESERVE_SIZE - 1 and card.facedown:
-            card.flip()
-        reserve.append(card)
-
-    base_card = pack.deal()
-    if base_card.facedown:
-        base_card.flip()
-    foundations[0].append(base_card)
-
-    for pile in tableau:
+    cards: list[Card] = []
+    while len(pack) > 0:
         card = pack.deal()
         if card.facedown:
             card.flip()
-        pile.append(card)
+        cards.append(card)
 
-    while len(pack) > 0:
-        card = pack.deal()
-        if not card.facedown:
-            card.flip()
-        stock.append(card)
+    for idx, card in enumerate(cards):
+        tableau[idx % TABLEAU_COLS].append(card)
 
-    return DemonState(
-        stock=stock,
-        waste=waste,
-        reserve=reserve,
+    return FreeCellState(
+        free_cells=free_cells,
         foundations=foundations,
         tableau=tableau,
-        foundation_base_rank=base_card.value,
     )
 
 
-class DemonWindow(Gtk.ApplicationWindow):
+class FreeCellWindow(Gtk.ApplicationWindow):
     def __init__(self, app: Gtk.Application, parent: Gtk.Window | None = None) -> None:
         super().__init__(application=app)
-        self.set_title("Demon")
-        self.set_default_size(980, 860)
+        self.set_title("FreeCell")
+        self.set_default_size(1280, 920)
 
         if parent is not None:
             self.set_transient_for(parent)
@@ -177,7 +123,7 @@ class DemonWindow(Gtk.ApplicationWindow):
 
         header = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
 
-        title = Gtk.Label(label="Demon")
+        title = Gtk.Label(label="FreeCell")
         title.add_css_class("title-2")
         title.set_halign(Gtk.Align.START)
         title.set_hexpand(True)
@@ -190,7 +136,7 @@ class DemonWindow(Gtk.ApplicationWindow):
         root.append(header)
 
         self._status = Gtk.Label(
-            label="Base-rank foundations, draw-3 stock, reserve fills gaps first"
+            label="4 free cells, 8 cascades, alternating-color tableau, manual foundations"
         )
         self._status.add_css_class("dim-label")
         self._status.set_halign(Gtk.Align.START)
@@ -198,13 +144,11 @@ class DemonWindow(Gtk.ApplicationWindow):
 
         root.append(
             build_rules_panel(
-                f"Reserve: 13 cards, top card playable. Base rank: "
-                f"{RANK_NAMES[self._state.foundation_base_rank]}.\n"
-                "Foundations: build up by suit from the base rank, wrapping after King.\n"
-                "Tableau: build down by alternating color, wrapping Ace to King.\n"
-                "Moves: move a single top card or an entire tableau column.\n"
-                "Empty tableau spaces must be filled from the reserve if possible; once the reserve is empty, fill from the waste.\n"
-                "Stock: draw 3 to the waste with unlimited redeals."
+                "Foundations: build up by suit from Ace to King.\n"
+                "Tableau: build down by alternating color. Any card may fill an empty cascade.\n"
+                "Free cells: each cell holds one card.\n"
+                "You may move valid tableau runs when enough empty free cells and cascades are available.\n"
+                "Foundations are manual, not automatic."
             )
         )
 
@@ -212,10 +156,9 @@ class DemonWindow(Gtk.ApplicationWindow):
         self._board.set_halign(Gtk.Align.START)
         root.append(self._board)
 
-        self._apply_mandatory_reserve_moves()
         self._refresh_board()
-
         self.set_child(root)
+        self.maximize()
 
     def _refresh_board(self) -> None:
         child = self._board.get_first_child()
@@ -229,35 +172,21 @@ class DemonWindow(Gtk.ApplicationWindow):
         outer = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=14)
 
         top_row = Gtk.Box(
-            orientation=Gtk.Orientation.HORIZONTAL, spacing=TABLEAU_COL_GAP
+            orientation=Gtk.Orientation.HORIZONTAL,
+            spacing=TABLEAU_COL_GAP,
         )
-        top_row.append(
-            build_named_pile(
-                "Reserve",
-                self._state.reserve,
-                self._card_widget,
-                on_click=self._on_reserve_clicked,
-                selected=self._is_selected_named("reserve", 0),
+        for idx, pile in enumerate(self._state.free_cells):
+            top_row.append(
+                build_named_pile(
+                    f"Cell {idx + 1}",
+                    pile,
+                    self._card_widget,
+                    on_click=lambda freecell_idx=idx: self._on_free_cell_clicked(
+                        freecell_idx
+                    ),
+                    selected=self._is_selected_named("freecell", idx),
+                )
             )
-        )
-        top_row.append(
-            build_named_pile(
-                "Stock",
-                self._state.stock,
-                self._card_widget,
-                on_click=self._on_stock_clicked,
-                selected=False,
-            )
-        )
-        top_row.append(
-            build_named_pile(
-                "Waste",
-                self._state.waste,
-                self._card_widget,
-                on_click=self._on_waste_clicked,
-                selected=self._is_selected_named("waste", 0),
-            )
-        )
 
         spacer = Gtk.Box()
         spacer.set_hexpand(True)
@@ -294,8 +223,8 @@ class DemonWindow(Gtk.ApplicationWindow):
                     selected_start_index=self._selected_tableau_start(column),
                 )
             )
-        outer.append(tableau_row)
 
+        outer.append(tableau_row)
         return outer
 
     def _card_widget(self, card: Card | None) -> Gtk.Widget:
@@ -305,9 +234,8 @@ class DemonWindow(Gtk.ApplicationWindow):
         self._state = create_initial_state()
         self._selection = None
         self._set_status(
-            "Base-rank foundations, draw-3 stock, reserve fills gaps first"
+            "4 free cells, 8 cascades, alternating-color tableau, manual foundations"
         )
-        self._apply_mandatory_reserve_moves()
         self._refresh_board()
 
     def _install_selection_css(self) -> None:
@@ -349,45 +277,33 @@ class DemonWindow(Gtk.ApplicationWindow):
             return None
         return selection.start_index
 
-    def _on_stock_clicked(self) -> None:
-        changed = draw_three_from_stock(self._state.stock, self._state.waste)
-        if not changed:
-            changed = redeal_waste_to_stock(self._state.stock, self._state.waste)
-        if changed:
-            self._selection = None
-            self._apply_mandatory_reserve_moves()
-            self._refresh_board()
-
-    def _on_reserve_clicked(self) -> None:
-        if len(self._state.reserve) == 0:
-            self._selection = None
+    def _on_free_cell_clicked(self, freecell_idx: int) -> None:
+        if self._selection is not None:
+            moved = self._move_selection_to_free_cell(freecell_idx)
+            if moved:
+                self._selection = None
+                self._check_win()
+                self._refresh_board()
             return
-        if self._selection and self._selection.source == "reserve":
+
+        source = self._state.free_cells[freecell_idx]
+        if len(source) == 0:
+            return
+
+        if self._selection and self._selection.source == "freecell":
             self._selection = None
             self._set_status("Selection cleared")
             return
 
-        self._selection = Selection(source="reserve", pile_index=0)
-        self._set_status("Selected reserve top")
-
-    def _on_waste_clicked(self) -> None:
-        if len(self._state.waste) == 0:
-            self._selection = None
-            return
-        if self._selection and self._selection.source == "waste":
-            self._selection = None
-            self._set_status("Selection cleared")
-            return
-
-        self._selection = Selection(source="waste", pile_index=0)
-        self._set_status("Selected waste top")
+        self._selection = Selection(source="freecell", pile_index=freecell_idx)
+        self._set_status(f"Selected free cell {freecell_idx + 1}")
+        self._refresh_board()
 
     def _on_foundation_clicked(self, foundation_idx: int) -> None:
         if self._selection is not None:
             moved = self._move_selection_to_foundation(foundation_idx)
             if moved:
                 self._selection = None
-                self._apply_mandatory_reserve_moves()
                 self._check_win()
                 self._refresh_board()
             return
@@ -398,6 +314,7 @@ class DemonWindow(Gtk.ApplicationWindow):
 
         self._selection = Selection(source="foundation", pile_index=foundation_idx)
         self._set_status(f"Selected foundation {foundation_idx + 1} top")
+        self._refresh_board()
 
     def _on_tableau_clicked(self, tableau_idx: int, y_pos: float) -> None:
         pile = self._state.tableau[tableau_idx]
@@ -406,7 +323,6 @@ class DemonWindow(Gtk.ApplicationWindow):
             moved = self._move_selection_to_tableau(tableau_idx)
             if moved:
                 self._selection = None
-                self._apply_mandatory_reserve_moves()
                 self._check_win()
                 self._refresh_board()
             return
@@ -415,18 +331,46 @@ class DemonWindow(Gtk.ApplicationWindow):
         if clicked_index is None:
             return
 
-        if clicked_index == len(pile.cards) - 1:
-            start_index = clicked_index
-            self._set_status(f"Selected T{tableau_idx + 1} top card")
-        else:
-            start_index = 0
-            self._set_status(f"Selected full column from T{tableau_idx + 1}")
-
         self._selection = Selection(
             source="tableau",
             pile_index=tableau_idx,
-            start_index=start_index,
+            start_index=clicked_index,
         )
+        selected_count = len(pile.cards) - clicked_index
+        movable_capacity = self._selected_move_capacity(tableau_idx)
+        if clicked_index == len(pile.cards) - 1:
+            self._set_status(
+                f"Selected T{tableau_idx + 1} top card; current run capacity is {movable_capacity}"
+            )
+        else:
+            self._set_status(
+                f"Selected run of {selected_count} from T{tableau_idx + 1}; current run capacity is {movable_capacity}"
+            )
+        self._refresh_board()
+
+    def _move_selection_to_free_cell(self, freecell_idx: int) -> bool:
+        selection = self._selection
+        if selection is None:
+            return False
+        if selection.source == "freecell" and selection.pile_index == freecell_idx:
+            self._selection = None
+            self._set_status("Selection cleared")
+            self._refresh_board()
+            return False
+
+        dest = self._state.free_cells[freecell_idx]
+        if len(dest) != 0:
+            self._set_status("Free cell is occupied")
+            return False
+        if not self._selection_is_single_card(selection):
+            self._set_status("Only single cards can move to a free cell")
+            return False
+
+        moved = self._pop_selected_cards(selection)
+        if len(moved) != 1:
+            return False
+        dest.append(moved[0])
+        return True
 
     def _move_selection_to_foundation(self, foundation_idx: int) -> bool:
         selection = self._selection
@@ -438,12 +382,11 @@ class DemonWindow(Gtk.ApplicationWindow):
             return False
 
         card = self._peek_selected_card(selection)
-        dest = self._state.foundations[foundation_idx]
         if card is None:
             return False
-        if not can_place_on_foundation(
-            card, dest.peek(), self._state.foundation_base_rank
-        ):
+
+        dest = self._state.foundations[foundation_idx]
+        if not can_place_on_foundation(card, dest.peek()):
             self._set_status("Illegal move to foundation")
             return False
 
@@ -451,108 +394,77 @@ class DemonWindow(Gtk.ApplicationWindow):
         if len(moved) != 1:
             return False
         dest.append(moved[0])
-        self._post_source_cleanup(selection)
         return True
 
     def _move_selection_to_tableau(self, tableau_idx: int) -> bool:
         selection = self._selection
         if selection is None:
             return False
-
         if selection.source == "tableau" and selection.pile_index == tableau_idx:
             self._set_status("Cannot move onto same tableau")
             return False
 
-        dest = self._state.tableau[tableau_idx]
         cards = self._get_selected_cards(selection)
         if not cards:
             return False
+        if len(cards) > 1 and not is_valid_tableau_run(cards):
+            self._set_status("Selected run is not valid")
+            return False
 
-        if dest.peek() is None:
-            if not self._can_fill_empty_tableau(selection):
+        dest = self._state.tableau[tableau_idx]
+        if not can_place_on_tableau(cards[0], dest.peek()):
+            self._set_status("Illegal move to tableau")
+            return False
+
+        if selection.source == "tableau":
+            max_cards = max_movable_cards(
+                empty_free_cells=self._count_empty_free_cells(),
+                empty_tableau=self._count_empty_tableau(excluding=selection.pile_index),
+                destination_is_empty=len(dest) == 0,
+            )
+            if len(cards) > max_cards:
                 self._set_status(
-                    "Empty tableau must be filled from reserve, then waste"
+                    f"Not enough free cells or empty cascades for that run; current limit is {max_cards}"
                 )
                 return False
-        else:
-            if not is_valid_tableau_run(cards):
-                self._set_status("Selected cards are not a valid tableau move")
-                return False
-            if not can_place_on_tableau(cards[0], dest.peek()):
-                self._set_status("Illegal move to tableau")
-                return False
+        elif len(cards) > 1:
+            self._set_status("Only tableau runs can move multiple cards")
+            return False
 
         moved = self._pop_selected_cards(selection)
         for card in moved:
             dest.append(card)
-        self._post_source_cleanup(selection)
         return True
 
-    def _can_fill_empty_tableau(self, selection: Selection) -> bool:
-        if len(self._state.reserve) > 0:
-            return selection.source == "reserve" and self._selection_is_single_card(
-                selection
-            )
-        return selection.source == "waste" and self._selection_is_single_card(selection)
+    def _count_empty_free_cells(self) -> int:
+        return sum(1 for pile in self._state.free_cells if len(pile) == 0)
 
-    def _apply_mandatory_reserve_moves(self) -> None:
-        changed = True
-        while changed:
-            changed = False
-
-            empty_tableau = self._first_empty_tableau_index()
-            if empty_tableau is not None and len(self._state.reserve) > 0:
-                self._state.tableau[empty_tableau].append(self._state.reserve.pop())
-                self._reveal_reserve_top()
-                changed = True
-                continue
-
-            reserve_top = self._state.reserve.peek()
-            if reserve_top is None:
-                continue
-
-            foundation_idx = self._find_foundation_for_card(reserve_top)
-            if foundation_idx is None:
-                continue
-
-            self._state.foundations[foundation_idx].append(self._state.reserve.pop())
-            self._reveal_reserve_top()
-            changed = True
-
-    def _find_foundation_for_card(self, card: Card) -> int | None:
-        for idx, foundation in enumerate(self._state.foundations):
-            if can_place_on_foundation(
-                card, foundation.peek(), self._state.foundation_base_rank
-            ):
-                return idx
-        return None
-
-    def _first_empty_tableau_index(self) -> int | None:
+    def _count_empty_tableau(self, excluding: int | None = None) -> int:
+        count = 0
         for idx, pile in enumerate(self._state.tableau):
+            if excluding is not None and idx == excluding:
+                continue
             if len(pile) == 0:
-                return idx
-        return None
+                count += 1
+        return count
 
-    def _reveal_reserve_top(self) -> None:
-        top = self._state.reserve.peek()
-        if top is not None and top.facedown:
-            top.flip()
+    def _selected_move_capacity(self, source_tableau_idx: int) -> int:
+        return max_movable_cards(
+            empty_free_cells=self._count_empty_free_cells(),
+            empty_tableau=self._count_empty_tableau(excluding=source_tableau_idx),
+            destination_is_empty=False,
+        )
 
     def _peek_selected_card(self, selection: Selection) -> Card | None:
         cards = self._get_selected_cards(selection)
         return cards[0] if cards else None
 
     def _selection_is_single_card(self, selection: Selection) -> bool:
-        cards = self._get_selected_cards(selection)
-        return len(cards) == 1
+        return len(self._get_selected_cards(selection)) == 1
 
     def _get_selected_cards(self, selection: Selection) -> list[Card]:
-        if selection.source == "reserve":
-            top = self._state.reserve.peek()
-            return [top] if top is not None else []
-
-        if selection.source == "waste":
-            top = self._state.waste.peek()
+        if selection.source == "freecell":
+            top = self._state.free_cells[selection.pile_index].peek()
             return [top] if top is not None else []
 
         if selection.source == "foundation":
@@ -560,19 +472,17 @@ class DemonWindow(Gtk.ApplicationWindow):
             return [top] if top is not None else []
 
         if selection.source == "tableau":
-            pile_cards = self._state.tableau[selection.pile_index].cards
             if selection.start_index is None:
                 return []
-            return list(pile_cards[selection.start_index :])
+            return list(
+                self._state.tableau[selection.pile_index].cards[selection.start_index :]
+            )
 
         return []
 
     def _pop_selected_cards(self, selection: Selection) -> list[Card]:
-        if selection.source == "reserve":
-            return [self._state.reserve.pop()]
-
-        if selection.source == "waste":
-            return [self._state.waste.pop()]
+        if selection.source == "freecell":
+            return [self._state.free_cells[selection.pile_index].pop()]
 
         if selection.source == "foundation":
             return [self._state.foundations[selection.pile_index].pop()]
@@ -588,10 +498,6 @@ class DemonWindow(Gtk.ApplicationWindow):
         moved.reverse()
         return moved
 
-    def _post_source_cleanup(self, selection: Selection) -> None:
-        if selection.source == "reserve":
-            self._reveal_reserve_top()
-
     def _tableau_card_index_from_y(self, pile: Pile, y_pos: float) -> int | None:
         cards = pile.cards
         if not cards:
@@ -599,9 +505,10 @@ class DemonWindow(Gtk.ApplicationWindow):
 
         starts: list[int] = []
         y = 0
-        for _idx in range(len(cards)):
+        for idx in range(len(cards)):
             starts.append(y)
-            y += 38
+            if idx < len(cards) - 1:
+                y += FACE_UP_OVERLAP
 
         clicked = int(y_pos)
         for idx in range(len(starts) - 1, -1, -1):
@@ -623,5 +530,5 @@ def launch(parent_window: Gtk.Window) -> None:
     if app is None:
         raise RuntimeError("Parent window has no associated GTK application.")
 
-    game_window = DemonWindow(app=app, parent=parent_window)
+    game_window = FreeCellWindow(app=app, parent=parent_window)
     game_window.present()

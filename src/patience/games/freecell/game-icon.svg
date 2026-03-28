@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 96 96">
+  <rect x="8" y="8" width="80" height="80" rx="10" fill="#0f6d3a"/>
+  <rect x="18" y="14" width="60" height="68" rx="7" fill="#ffffff" stroke="#d8d8d8"/>
+
+  <rect x="26" y="24" width="14" height="14" rx="3" fill="#1f4db8"/>
+  <rect x="44" y="24" width="14" height="14" rx="3" fill="#1f4db8"/>
+  <path d="M66 28 C63 23 56 23 56 30 C56 36 66 41 66 41 C66 41 76 36 76 30 C76 23 69 23 66 28 Z" fill="#cc1f2f"/>
+  <path d="M64 41 L68 41 L71 56 L66 52 L61 56 Z" fill="#cc1f2f"/>
+
+  <text x="24" y="70" font-size="12" font-family="sans-serif" font-weight="700" fill="#111111">FC</text>
+</svg>

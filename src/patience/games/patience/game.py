@@ -11,6 +11,7 @@ gi.require_version("Gdk", "4.0")
 from gi.repository import Gdk, Gtk  # noqa: E402
 
 from patience.ui.cards import build_card_widget, resolve_card_data_dir
+from patience.ui.help import build_rules_panel
 from patience.ui.piles import TABLEAU_COL_GAP, build_named_pile, build_tableau_column
 
 DRAW_COUNT = 3
@@ -153,7 +154,15 @@ class PatienceWindow(Gtk.ApplicationWindow):
         self._status.set_halign(Gtk.Align.START)
         root.append(self._status)
 
-        root.append(self._build_help_panel())
+        root.append(
+            build_rules_panel(
+                "Foundations: build up by suit from Ace to King.\n"
+                "Tableau: build down by alternating color; only Kings fill empty columns.\n"
+                "You may move a single face-up card or a valid face-up run between tableau columns.\n"
+                "Stock: draw 3 cards to the waste with unlimited redeals.\n"
+                "Foundation moves are applied automatically when available."
+            )
+        )
 
         self._board = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         self._board.set_halign(Gtk.Align.START)
@@ -170,33 +179,6 @@ class PatienceWindow(Gtk.ApplicationWindow):
             self._board.remove(child)
             child = nxt
         self._board.append(self._build_board_grid())
-
-    def _build_help_panel(self) -> Gtk.Widget:
-        expander = Gtk.Expander(label="Rules")
-        expander.set_expanded(False)
-
-        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
-        box.set_margin_top(8)
-        box.set_margin_bottom(8)
-        box.set_margin_start(12)
-        box.set_margin_end(12)
-
-        help_text = Gtk.Label(
-            label=(
-                "Foundations: build up by suit from Ace to King.\n"
-                "Tableau: build down by alternating color; only Kings fill empty columns.\n"
-                "You may move a single face-up card or a valid face-up run between tableau columns.\n"
-                "Stock: draw 3 cards to the waste with unlimited redeals.\n"
-                "Foundation moves are applied automatically when available."
-            )
-        )
-        help_text.set_wrap(True)
-        help_text.set_halign(Gtk.Align.START)
-        help_text.set_xalign(0)
-
-        box.append(help_text)
-        expander.set_child(box)
-        return expander
 
     def _build_board_grid(self) -> Gtk.Widget:
         # Shared 7-column grid:

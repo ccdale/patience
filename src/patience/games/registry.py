@@ -36,5 +36,6 @@ GAME_REGISTRY: tuple[GameSpec, ...] = (
         id="freecell",
         title="FreeCell",
         module="patience.games.freecell",
+        available=True,
     ),
 )
