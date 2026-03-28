@@ -10,9 +10,13 @@ gi.require_version("Gdk", "4.0")
 
 from gi.repository import Gdk, Gtk  # noqa: E402
 
-from patience.ui.cards import build_card_widget, resolve_card_data_dir
-from patience.ui.help import build_rules_panel
-from patience.ui.piles import TABLEAU_COL_GAP, build_named_pile, build_tableau_column
+from patience.ui.cards import build_card_widget, resolve_card_data_dir  # noqa: E402
+from patience.ui.help import build_rules_panel  # noqa: E402
+from patience.ui.piles import (  # noqa: E402
+    TABLEAU_COL_GAP,
+    build_named_pile,
+    build_tableau_column,
+)
 
 DRAW_COUNT = 3
 

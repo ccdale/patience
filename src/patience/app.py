@@ -2,10 +2,10 @@ import gi
 
 gi.require_version("Gtk", "4.0")
 
-from gi.repository import Gtk
+from gi.repository import Gtk  # noqa: E402
 
-from patience.ui.theme import install_app_theme_css
-from patience.window import LauncherWindow
+from patience.ui.theme import install_app_theme_css  # noqa: E402
+from patience.window import LauncherWindow  # noqa: E402
 
 
 class PatienceApplication(Gtk.Application):
