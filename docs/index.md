@@ -6,6 +6,13 @@
 
 This index orders the notes from app bootstrap through shared UI layers, then into game-module architecture and concrete game examples.
 
+## How To Use These Notes
+
+1. If you are new to the codebase, read from top to bottom in the listed order.
+2. Use the previous/index/next links in each file to move through the sequence quickly.
+3. Read the generic pattern before game deep dives, then compare Cruel and Patience to understand complexity differences.
+4. When implementing a new game, keep `game-module-pattern.md` open as a checklist.
+
 1. [app.py notes](app.py.md)
 2. [window.py notes](window.py.md)
 3. [game registry notes](game-registry.md)
