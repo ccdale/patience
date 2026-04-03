@@ -2,12 +2,6 @@
 
 ---
 
-I’m reading the exact current app.py contents first, then I’ll give you a concise code-reading note set focused on behavior and reasoning.
-
-Read [](file:///home/chris/src/patience/src/patience/app.py)
-
-Here’s a clean set of notes for app.py.
-
 **Purpose**
 
 This file is the application entry point. Its job is intentionally small:
