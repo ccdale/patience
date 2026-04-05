@@ -86,3 +86,55 @@ def test_collect_and_redeal_produces_piles_of_four() -> None:
 
     pile_lengths = [len(p) for p in tableau]
     assert pile_lengths == [4, 4, 4]
+
+
+def test_collect_and_redeal_keeps_tableau0_top_as_first_redeal_top() -> None:
+    tableau = tuple(Pile() for _ in range(3))
+
+    # Pile 0 has more than 4 cards. Card 6 is the visible top before redeal.
+    top_before_redeal = Card(6)
+    for card_idx in range(1, 7):
+        tableau[0].append(top_before_redeal if card_idx == 6 else Card(card_idx))
+
+    # Extra cards in following piles ensure the first redeal block is meaningful.
+    for card_idx in range(7, 11):
+        tableau[1].append(Card(card_idx))
+
+    collect_and_redeal(tableau)
+
+    assert tableau[0].peek() is top_before_redeal
+    assert len(tableau[0]) == 4
+
+
+def test_collect_and_redeal_preserves_pickup_order_across_all_piles() -> None:
+    tableau = tuple(Pile() for _ in range(3))
+
+    c1 = Card(1)
+    c2 = Card(2)
+    c3 = Card(3)
+    c4 = Card(4)
+    c5 = Card(5)
+    c6 = Card(6)
+    c7 = Card(7)
+    c8 = Card(8)
+    c9 = Card(9)
+    c10 = Card(10)
+
+    # bottom->top in each pile at setup
+    for card in (c1, c2, c3, c4, c5):
+        tableau[0].append(card)
+    for card in (c6, c7, c8):
+        tableau[1].append(card)
+    for card in (c9, c10):
+        tableau[2].append(card)
+
+    # Pickup order is: 5,4,3,2,1,8,7,6,10,9
+    collect_and_redeal(tableau)
+
+    # After redeal in groups of 4 with first-picked card on top of each group:
+    # pile 0 bottom->top: 2,3,4,5
+    # pile 1 bottom->top: 6,7,8,1
+    # pile 2 bottom->top: 9,10
+    assert list(tableau[0].cards) == [c2, c3, c4, c5]
+    assert list(tableau[1].cards) == [c6, c7, c8, c1]
+    assert list(tableau[2].cards) == [c9, c10]

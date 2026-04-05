@@ -134,20 +134,23 @@ def _has_valid_moves(
 
 
 def collect_and_redeal(tableau: tuple[Pile, ...]) -> None:
-    """Gather all tableau cards left→right, top (last dealt) first within each
-    pile (i.e. bottom-to-top as dealt, so the visual order is preserved on
-    redeal), then re-deal into piles of 4."""
+    """Gather tableau cards left->right, top-first within each pile, then
+    redeal in groups of 4 while preserving that pickup order as visible tops.
+
+    In particular, the first card picked up (tableau 0 top card) becomes the
+    top card of the first redealt pile.
+    """
     cards: list[Card] = []
     for pile in tableau:
-        # We want to redeal in the original stacking order (bottom first).
-        cards.extend(pile.cards)
-
-    for pile in tableau:
         while pile.peek() is not None:
-            pile.pop()
+            # Pickup order is top-first from each tableau pile.
+            cards.append(pile.pop())
 
-    for idx, card in enumerate(cards):
-        tableau[idx // PILE_SIZE].append(card)
+    for start in range(0, len(cards), PILE_SIZE):
+        chunk = cards[start : start + PILE_SIZE]
+        # Append reversed so first picked card in each 4-card block ends on top.
+        for card in reversed(chunk):
+            tableau[start // PILE_SIZE].append(card)
 
 
 # ---------------------------------------------------------------------------
