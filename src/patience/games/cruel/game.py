@@ -193,9 +193,9 @@ class CruelWindow(Gtk.ApplicationWindow):
         title.set_hexpand(True)
         header.append(title)
 
-        redeal_btn = Gtk.Button(label="Redeal")
-        redeal_btn.connect("clicked", self._on_redeal_clicked)
-        header.append(redeal_btn)
+        self._redeal_btn = Gtk.Button(label="Redeal")
+        self._redeal_btn.connect("clicked", self._on_redeal_clicked)
+        header.append(self._redeal_btn)
 
         new_game_btn = Gtk.Button(label="New Game")
         new_game_btn.connect("clicked", self._on_new_game_clicked)
@@ -316,6 +316,7 @@ class CruelWindow(Gtk.ApplicationWindow):
     def _on_new_game_clicked(self, _button: Gtk.Button) -> None:
         self._state = create_initial_state()
         self._selection = None
+        self._redeal_btn.set_sensitive(True)
         self._set_status("Same suit, one rank lower. Redeal to regroup.")
         self._refresh_board()
 
@@ -323,10 +324,12 @@ class CruelWindow(Gtk.ApplicationWindow):
         collect_and_redeal(self._state.tableau)
         self._selection = None
         if not _has_valid_moves(self._state.foundations, self._state.tableau):
+            self._redeal_btn.set_sensitive(False)
             self._set_status("No valid moves — game over.")
             self._status.add_css_class("game-over")
             self._refresh_board()
             return
+        self._redeal_btn.set_sensitive(True)
         self._set_status("Redealt.")
         self._refresh_board()
         moves = _collect_auto_moves(self._state.foundations, self._state.tableau)
