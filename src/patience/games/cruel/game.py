@@ -346,7 +346,7 @@ class CruelWindow(Gtk.ApplicationWindow):
             self._selection = None
             self._refresh_board()
             moves = _collect_auto_moves(self._state.foundations, self._state.tableau)
-            self._animate_auto_moves(moves, check_win=True)
+            self._animate_auto_moves(moves, check_win=True, check_redeal_prompt=True)
         else:
             self._set_status("Illegal move to foundation")
 
@@ -370,7 +370,9 @@ class CruelWindow(Gtk.ApplicationWindow):
                 moves = _collect_auto_moves(
                     self._state.foundations, self._state.tableau
                 )
-                self._animate_auto_moves(moves, check_win=True)
+                self._animate_auto_moves(
+                    moves, check_win=True, check_redeal_prompt=True
+                )
             else:
                 self._set_status("Illegal move")
             return
@@ -387,13 +389,19 @@ class CruelWindow(Gtk.ApplicationWindow):
     # ------------------------------------------------------------------
 
     def _animate_auto_moves(
-        self, moves: list[tuple[int, int]], check_win: bool = False
+        self,
+        moves: list[tuple[int, int]],
+        check_win: bool = False,
+        check_redeal_prompt: bool = False,
     ) -> None:
         """Apply auto-moves one at a time with a short delay between each so
         the player can see each card slide to its foundation."""
         if not moves:
+            won = False
             if check_win:
-                self._check_win()
+                won = self._check_win()
+            if check_redeal_prompt and not won:
+                self._set_redeal_prompt_if_stuck()
             return
         tab_idx, found_idx = moves[0]
         pile = self._state.tableau[tab_idx]
@@ -402,13 +410,23 @@ class CruelWindow(Gtk.ApplicationWindow):
             self._state.foundations[found_idx].append(pile.pop())
         self._refresh_board()
         GLib.timeout_add(
-            440, lambda: self._animate_auto_moves(moves[1:], check_win) or False
+            440,
+            lambda: (
+                self._animate_auto_moves(moves[1:], check_win, check_redeal_prompt)
+                or False
+            ),
         )
 
-    def _check_win(self) -> None:
+    def _check_win(self) -> bool:
         total = sum(len(f) for f in self._state.foundations)
         if total == 52:
             self._set_status("You win! 🎉")
+            return True
+        return False
+
+    def _set_redeal_prompt_if_stuck(self) -> None:
+        if not _has_valid_moves(self._state.foundations, self._state.tableau):
+            self._set_status("No further moves, Redeal")
 
     def _set_status(self, message: str) -> None:
         self._status.remove_css_class("game-over")

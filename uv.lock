@@ -71,7 +71,7 @@ wheels = [
 
 [[package]]
 name = "patience"
-version = "0.1.40"
+version = "0.1.42"
 source = { editable = "." }
 dependencies = [
     { name = "ccacards" },
