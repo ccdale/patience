@@ -215,10 +215,18 @@ def _collect_auto_moves(
     return moves
 
 
+def _clone_card(card: Card) -> Card:
+    suit_index = Card.suitNames.index(card.suit)
+    clone = Card((suit_index * 13) + card.value + 1)
+    if clone.facedown != card.facedown:
+        clone.flip()
+    return clone
+
+
 def _clone_pile(pile: Pile) -> Pile:
     clone = Pile()
     for card in pile.cards:
-        clone.append(card)
+        clone.append(_clone_card(card))
     return clone
 
 
@@ -306,21 +314,30 @@ def _has_move_during_stock_pass(
     sim_foundations = tuple(_clone_pile(pile) for pile in foundations)
     sim_tableau = tuple(_clone_pile(pile) for pile in tableau)
 
-    if len(sim_stock) == 0:
-        redeal_waste_to_stock(sim_stock, sim_waste)
+    try:
+        if len(sim_stock) == 0:
+            redeal_waste_to_stock(sim_stock, sim_waste)
 
-    while len(sim_stock) > 0:
-        draw_three_from_stock(sim_stock, sim_waste)
-        if _has_any_player_move(
-            sim_foundations,
-            sim_tableau,
-            sim_reserve,
-            sim_waste,
-            foundation_base_rank,
-        ):
-            return True
+        while len(sim_stock) > 0:
+            draw_three_from_stock(sim_stock, sim_waste)
+            if _has_any_player_move(
+                sim_foundations,
+                sim_tableau,
+                sim_reserve,
+                sim_waste,
+                foundation_base_rank,
+            ):
+                return True
 
-    return False
+        return False
+    finally:
+        sim_stock.cards.clear()
+        sim_waste.cards.clear()
+        sim_reserve.cards.clear()
+        for pile in sim_foundations:
+            pile.cards.clear()
+        for pile in sim_tableau:
+            pile.cards.clear()
 
 
 def is_stalemate(state: DemonState) -> bool:

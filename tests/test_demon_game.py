@@ -218,3 +218,39 @@ def test_is_stalemate_false_when_move_exists_in_future_draw() -> None:
     )
 
     assert is_stalemate(state) is False
+
+
+def test_is_stalemate_does_not_flip_live_stock_cards() -> None:
+    stock = Pile()
+    waste = Pile()
+    reserve = Pile()
+    foundations = tuple(Pile() for _ in range(4))
+    tableau = tuple(Pile() for _ in range(4))
+
+    stock_card = Card(2)
+    tableau_cards = [Card(20), Card(22), Card(24), Card(26)]
+
+    if not stock_card.facedown:
+        stock_card.flip()
+    for card in tableau_cards:
+        if card.facedown:
+            card.flip()
+
+    stock.append(stock_card)
+    for idx, card in enumerate(tableau_cards):
+        tableau[idx].append(card)
+
+    state = DemonState(
+        stock=stock,
+        waste=waste,
+        reserve=reserve,
+        foundations=foundations,
+        tableau=tableau,
+        foundation_base_rank=0,
+    )
+
+    assert state.stock.peek() is not None
+    assert state.stock.peek().facedown is True
+    _ = is_stalemate(state)
+    assert state.stock.peek() is not None
+    assert state.stock.peek().facedown is True
