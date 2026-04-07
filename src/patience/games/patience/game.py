@@ -148,6 +148,11 @@ class PatienceWindow(Gtk.ApplicationWindow):
         title.set_hexpand(True)
         header.append(title)
 
+        self._deselect_button = Gtk.Button(label="Deselect")
+        self._deselect_button.connect("clicked", self._on_deselect_clicked)
+        self._deselect_button.set_sensitive(False)
+        header.append(self._deselect_button)
+
         new_game_button = Gtk.Button(label="New Game")
         new_game_button.connect("clicked", self._on_new_game_clicked)
         header.append(new_game_button)
@@ -184,6 +189,7 @@ class PatienceWindow(Gtk.ApplicationWindow):
             self._board.remove(child)
             child = nxt
         self._board.append(self._build_board_grid())
+        self._deselect_button.set_sensitive(self._selection is not None)
 
     def _build_board_grid(self) -> Gtk.Widget:
         # Shared 7-column grid:
@@ -262,6 +268,11 @@ class PatienceWindow(Gtk.ApplicationWindow):
         self._state = create_initial_state()
         self._selection = None
         self._set_status("Draw-3, unlimited redeals, auto-foundation")
+        self._refresh_board()
+
+    def _on_deselect_clicked(self, _button: Gtk.Button) -> None:
+        self._selection = None
+        self._set_status("Selection cleared")
         self._refresh_board()
 
     def _install_selection_css(self) -> None:

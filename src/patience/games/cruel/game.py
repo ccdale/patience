@@ -193,6 +193,11 @@ class CruelWindow(Gtk.ApplicationWindow):
         title.set_hexpand(True)
         header.append(title)
 
+        self._deselect_btn = Gtk.Button(label="Deselect")
+        self._deselect_btn.connect("clicked", self._on_deselect_clicked)
+        self._deselect_btn.set_sensitive(False)
+        header.append(self._deselect_btn)
+
         self._redeal_btn = Gtk.Button(label="Redeal")
         self._redeal_btn.connect("clicked", self._on_redeal_clicked)
         header.append(self._redeal_btn)
@@ -236,6 +241,7 @@ class CruelWindow(Gtk.ApplicationWindow):
             self._board.remove(child)
             child = nxt
         self._board.append(self._build_board_grid())
+        self._deselect_btn.set_sensitive(self._selection is not None)
 
     def _build_board_grid(self) -> Gtk.Widget:
         outer = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=14)
@@ -318,6 +324,11 @@ class CruelWindow(Gtk.ApplicationWindow):
         self._selection = None
         self._redeal_btn.set_sensitive(True)
         self._set_status("Same suit, one rank lower. Redeal to regroup.")
+        self._refresh_board()
+
+    def _on_deselect_clicked(self, _button: Gtk.Button) -> None:
+        self._selection = None
+        self._set_status("Selection cleared")
         self._refresh_board()
 
     def _on_redeal_clicked(self, _button: Gtk.Button) -> None:

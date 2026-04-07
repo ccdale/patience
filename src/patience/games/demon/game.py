@@ -184,6 +184,11 @@ class DemonWindow(Gtk.ApplicationWindow):
         title.set_hexpand(True)
         header.append(title)
 
+        self._deselect_button = Gtk.Button(label="Deselect")
+        self._deselect_button.connect("clicked", self._on_deselect_clicked)
+        self._deselect_button.set_sensitive(False)
+        header.append(self._deselect_button)
+
         new_game_button = Gtk.Button(label="New Game")
         new_game_button.connect("clicked", self._on_new_game_clicked)
         header.append(new_game_button)
@@ -225,6 +230,7 @@ class DemonWindow(Gtk.ApplicationWindow):
             self._board.remove(child)
             child = nxt
         self._board.append(self._build_board())
+        self._deselect_button.set_sensitive(self._selection is not None)
 
     def _build_board(self) -> Gtk.Widget:
         outer = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=14)
@@ -309,6 +315,11 @@ class DemonWindow(Gtk.ApplicationWindow):
             "Base-rank foundations, draw-3 stock, reserve fills gaps first"
         )
         self._apply_mandatory_reserve_moves()
+        self._refresh_board()
+
+    def _on_deselect_clicked(self, _button: Gtk.Button) -> None:
+        self._selection = None
+        self._set_status("Selection cleared")
         self._refresh_board()
 
     def _install_selection_css(self) -> None:

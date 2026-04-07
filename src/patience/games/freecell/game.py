@@ -130,6 +130,11 @@ class FreeCellWindow(Gtk.ApplicationWindow):
         title.set_hexpand(True)
         header.append(title)
 
+        self._deselect_button = Gtk.Button(label="Deselect")
+        self._deselect_button.connect("clicked", self._on_deselect_clicked)
+        self._deselect_button.set_sensitive(False)
+        header.append(self._deselect_button)
+
         new_game_button = Gtk.Button(label="New Game")
         new_game_button.connect("clicked", self._on_new_game_clicked)
         header.append(new_game_button)
@@ -168,6 +173,7 @@ class FreeCellWindow(Gtk.ApplicationWindow):
             self._board.remove(child)
             child = nxt
         self._board.append(self._build_board())
+        self._deselect_button.set_sensitive(self._selection is not None)
 
     def _build_board(self) -> Gtk.Widget:
         outer = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=14)
@@ -237,6 +243,11 @@ class FreeCellWindow(Gtk.ApplicationWindow):
         self._set_status(
             "4 free cells, 8 cascades, alternating-color tableau, manual foundations"
         )
+        self._refresh_board()
+
+    def _on_deselect_clicked(self, _button: Gtk.Button) -> None:
+        self._selection = None
+        self._set_status("Selection cleared")
         self._refresh_board()
 
     def _install_selection_css(self) -> None:
