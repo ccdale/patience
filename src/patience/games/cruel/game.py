@@ -228,6 +228,8 @@ class CruelWindow(Gtk.ApplicationWindow):
         root.append(self._board)
 
         self._refresh_board()
+        moves = _collect_auto_moves(self._state.foundations, self._state.tableau)
+        self._animate_auto_moves(moves)
         self.set_child(root)
 
     # ------------------------------------------------------------------
@@ -325,6 +327,8 @@ class CruelWindow(Gtk.ApplicationWindow):
         self._redeal_btn.set_sensitive(True)
         self._set_status("Same suit, one rank lower. Redeal to regroup.")
         self._refresh_board()
+        moves = _collect_auto_moves(self._state.foundations, self._state.tableau)
+        self._animate_auto_moves(moves)
 
     def _on_deselect_clicked(self, _button: Gtk.Button) -> None:
         self._selection = None
