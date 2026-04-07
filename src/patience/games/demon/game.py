@@ -717,10 +717,11 @@ class DemonWindow(Gtk.ApplicationWindow):
             card = self._state.tableau[source_idx].pop()
 
         self._state.foundations[found_idx].append(card)
+        self._apply_mandatory_reserve_moves()
         self._refresh_board()
         GLib.timeout_add(
             440,
-            lambda: self._animate_auto_moves(moves[1:]) or False,
+            lambda: self._run_auto_moves_if_enabled() or False,
         )
 
     def _run_auto_moves_if_enabled(self) -> None:
