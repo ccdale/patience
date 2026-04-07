@@ -215,6 +215,133 @@ def _collect_auto_moves(
     return moves
 
 
+def _clone_pile(pile: Pile) -> Pile:
+    clone = Pile()
+    for card in pile.cards:
+        clone.append(card)
+    return clone
+
+
+def _has_any_player_move(
+    foundations: tuple[Pile, Pile, Pile, Pile],
+    tableau: tuple[Pile, Pile, Pile, Pile],
+    reserve: Pile,
+    waste: Pile,
+    foundation_base_rank: int,
+) -> bool:
+    reserve_top = reserve.peek()
+    waste_top = waste.peek()
+    foundation_tops = [foundation.peek() for foundation in foundations]
+    tableau_tops = [pile.peek() for pile in tableau]
+
+    # Foundation moves from reserve, waste, or tableau tops.
+    for source_card in [reserve_top, waste_top, *tableau_tops]:
+        if source_card is None:
+            continue
+        for foundation_top in foundation_tops:
+            if can_place_on_foundation(
+                source_card, foundation_top, foundation_base_rank
+            ):
+                return True
+
+    # Tableau to tableau moves (single top card or full column).
+    for src_idx, source in enumerate(tableau):
+        src_top = source.peek()
+        if src_top is None:
+            continue
+
+        full_column_cards = list(source.cards)
+        can_move_full_column = len(full_column_cards) > 1 and is_valid_tableau_run(
+            full_column_cards
+        )
+
+        for dst_idx, dest_top in enumerate(tableau_tops):
+            if src_idx == dst_idx:
+                continue
+
+            if dest_top is None:
+                # Empty spaces must be filled by reserve, then waste.
+                continue
+
+            if can_place_on_tableau(src_top, dest_top):
+                return True
+            if can_move_full_column and can_place_on_tableau(
+                full_column_cards[0], dest_top
+            ):
+                return True
+
+    # Reserve, waste, and foundation top cards can move to a non-empty tableau.
+    extra_sources = [reserve_top, waste_top, *foundation_tops]
+    for source_card in extra_sources:
+        if source_card is None:
+            continue
+        for dest_top in tableau_tops:
+            if dest_top is None:
+                continue
+            if can_place_on_tableau(source_card, dest_top):
+                return True
+
+    # Empty tableau spaces can only be filled by reserve top (or waste top if reserve is empty).
+    has_empty_tableau = any(top is None for top in tableau_tops)
+    if has_empty_tableau:
+        if reserve_top is not None:
+            return True
+        if waste_top is not None:
+            return True
+
+    return False
+
+
+def _has_move_during_stock_pass(
+    stock: Pile,
+    waste: Pile,
+    reserve: Pile,
+    foundations: tuple[Pile, Pile, Pile, Pile],
+    tableau: tuple[Pile, Pile, Pile, Pile],
+    foundation_base_rank: int,
+) -> bool:
+    sim_stock = _clone_pile(stock)
+    sim_waste = _clone_pile(waste)
+    sim_reserve = _clone_pile(reserve)
+    sim_foundations = tuple(_clone_pile(pile) for pile in foundations)
+    sim_tableau = tuple(_clone_pile(pile) for pile in tableau)
+
+    if len(sim_stock) == 0:
+        redeal_waste_to_stock(sim_stock, sim_waste)
+
+    while len(sim_stock) > 0:
+        draw_three_from_stock(sim_stock, sim_waste)
+        if _has_any_player_move(
+            sim_foundations,
+            sim_tableau,
+            sim_reserve,
+            sim_waste,
+            foundation_base_rank,
+        ):
+            return True
+
+    return False
+
+
+def is_stalemate(state: DemonState) -> bool:
+    if _has_any_player_move(
+        state.foundations,
+        state.tableau,
+        state.reserve,
+        state.waste,
+        state.foundation_base_rank,
+    ):
+        return False
+    return not _has_move_during_stock_pass(
+        state.stock,
+        state.waste,
+        state.reserve,
+        state.foundations,
+        state.tableau,
+        state.foundation_base_rank,
+    )
+
+
 class DemonWindow(Gtk.ApplicationWindow):
     def __init__(self, app: Gtk.Application, parent: Gtk.Window | None = None) -> None:
         super().__init__(application=app)
@@ -440,6 +567,7 @@ class DemonWindow(Gtk.ApplicationWindow):
         if changed:
             self._selection = None
             self._apply_mandatory_reserve_moves()
+            self._check_end_of_game()
             self._refresh_board()
             self._run_auto_moves_if_enabled()
 
@@ -473,7 +601,7 @@ class DemonWindow(Gtk.ApplicationWindow):
             if moved:
                 self._selection = None
                 self._apply_mandatory_reserve_moves()
-                self._check_win()
+                self._check_end_of_game()
                 self._refresh_board()
                 self._run_auto_moves_if_enabled()
             return
@@ -493,7 +621,7 @@ class DemonWindow(Gtk.ApplicationWindow):
             if moved:
                 self._selection = None
                 self._apply_mandatory_reserve_moves()
-                self._check_win()
+                self._check_end_of_game()
                 self._refresh_board()
                 self._run_auto_moves_if_enabled()
             return
@@ -696,16 +824,19 @@ class DemonWindow(Gtk.ApplicationWindow):
                 return idx
         return None
 
-    def _check_win(self) -> None:
+    def _check_end_of_game(self) -> None:
         total = sum(len(foundation) for foundation in self._state.foundations)
         if total == 52:
             self._set_status("You win!")
+            return
+        if is_stalemate(self._state):
+            self._set_status("No possible moves - game over.")
 
     def _animate_auto_moves(self, moves: list[tuple[str, int, int]]) -> None:
         """Apply auto-moves one at a time with a short delay between each so
         the player can see each card slide to its foundation."""
         if not moves:
-            self._check_win()
+            self._check_end_of_game()
             return
         source, source_idx, found_idx = moves[0]
 

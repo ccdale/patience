@@ -2,11 +2,14 @@ from ccacards.card import Card
 from ccacards.pile import Pile
 
 from patience.games.demon.game import (
+    DemonState,
     _collect_auto_moves,
+    _has_move_during_stock_pass,
     can_place_on_foundation,
     can_place_on_tableau,
     create_initial_state,
     draw_three_from_stock,
+    is_stalemate,
     is_valid_tableau_run,
     redeal_waste_to_stock,
 )
@@ -120,3 +123,98 @@ def test_collect_auto_moves_includes_waste_top_card() -> None:
     )
 
     assert moves == [("waste", 0, 0)]
+
+
+def test_has_move_during_stock_pass_detects_future_waste_move() -> None:
+    stock = Pile()
+    waste = Pile()
+    reserve = Pile()
+    foundations = tuple(Pile() for _ in range(4))
+    tableau = tuple(Pile() for _ in range(4))
+
+    eight_spades = Card(8)
+    seven_hearts = Card(20)
+    if eight_spades.facedown:
+        eight_spades.flip()
+
+    tableau[0].append(eight_spades)
+    stock.append(seven_hearts)
+
+    assert (
+        _has_move_during_stock_pass(
+            stock=stock,
+            waste=waste,
+            reserve=reserve,
+            foundations=foundations,
+            tableau=tableau,
+            foundation_base_rank=0,
+        )
+        is True
+    )
+
+
+def test_is_stalemate_true_when_no_moves_now_or_after_stock_pass() -> None:
+    stock = Pile()
+    waste = Pile()
+    reserve = Pile()
+    foundations = tuple(Pile() for _ in range(4))
+    tableau = tuple(Pile() for _ in range(4))
+
+    seven_hearts = Card(20)
+    nine_hearts = Card(22)
+    ten_hearts = Card(23)
+    jack_hearts = Card(24)
+    queen_hearts = Card(25)
+
+    if nine_hearts.facedown:
+        nine_hearts.flip()
+    if ten_hearts.facedown:
+        ten_hearts.flip()
+    if jack_hearts.facedown:
+        jack_hearts.flip()
+    if queen_hearts.facedown:
+        queen_hearts.flip()
+
+    waste.append(seven_hearts)
+    tableau[0].append(nine_hearts)
+    tableau[1].append(ten_hearts)
+    tableau[2].append(jack_hearts)
+    tableau[3].append(queen_hearts)
+
+    state = DemonState(
+        stock=stock,
+        waste=waste,
+        reserve=reserve,
+        foundations=foundations,
+        tableau=tableau,
+        foundation_base_rank=0,
+    )
+
+    assert is_stalemate(state) is True
+
+
+def test_is_stalemate_false_when_move_exists_in_future_draw() -> None:
+    stock = Pile()
+    waste = Pile()
+    reserve = Pile()
+    foundations = tuple(Pile() for _ in range(4))
+    tableau = tuple(Pile() for _ in range(4))
+
+    eight_spades = Card(8)
+    seven_hearts = Card(20)
+    if eight_spades.facedown:
+        eight_spades.flip()
+
+    tableau[0].append(eight_spades)
+    stock.append(seven_hearts)
+
+    state = DemonState(
+        stock=stock,
+        waste=waste,
+        reserve=reserve,
+        foundations=foundations,
+        tableau=tableau,
+        foundation_base_rank=0,
+    )
+
+    assert is_stalemate(state) is False
