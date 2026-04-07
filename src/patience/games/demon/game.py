@@ -8,7 +8,7 @@ from ccacards.pile import Pile
 gi.require_version("Gdk", "4.0")
 gi.require_version("Gtk", "4.0")
 
-from gi.repository import Gdk, Gtk  # noqa: E402
+from gi.repository import Gdk, GLib, Gtk  # noqa: E402
 
 from patience.ui.cards import build_card_widget, resolve_card_data_dir
 from patience.ui.help import build_rules_panel
@@ -155,6 +155,66 @@ def create_initial_state() -> DemonState:
     )
 
 
+def _collect_auto_moves(
+    foundations: tuple[Pile, Pile, Pile, Pile],
+    tableau: tuple[Pile, Pile, Pile, Pile],
+    reserve: Pile,
+    waste: Pile,
+    foundation_base_rank: int,
+) -> list[tuple[str, int, int]]:
+    """Simulate the auto-move cascade and return an ordered list of
+    (source, source_idx, foundation_idx) tuples without modifying state.
+    Checks reserve first, then waste, then tableau."""
+    found_tops: list[Card | None] = [f.peek() for f in foundations]
+    moves: list[tuple[str, int, int]] = []
+    moved = True
+    
+    while moved:
+        moved = False
+        
+        # Check reserve first
+        card = reserve.peek()
+        if card is not None:
+            for found_idx, found_top in enumerate(found_tops):
+                if can_place_on_foundation(card, found_top, foundation_base_rank):
+                    moves.append(("reserve", 0, found_idx))
+                    found_tops[found_idx] = card
+                    moved = True
+                    break
+        
+        if moved:
+            continue
+        
+        # Check waste
+        card = waste.peek()
+        if card is not None:
+            for found_idx, found_top in enumerate(found_tops):
+                if can_place_on_foundation(card, found_top, foundation_base_rank):
+                    moves.append(("waste", 0, found_idx))
+                    found_tops[found_idx] = card
+                    moved = True
+                    break
+        
+        if moved:
+            continue
+        
+        # Check tableau
+        for tab_idx, tab in enumerate(tableau):
+            card = tab.peek()
+            if card is None:
+                continue
+            for found_idx, found_top in enumerate(found_tops):
+                if can_place_on_foundation(card, found_top, foundation_base_rank):
+                    moves.append(("tableau", tab_idx, found_idx))
+                    found_tops[found_idx] = card
+                    moved = True
+                    break
+            if moved:
+                break
+    
+    return moves
+
+
 class DemonWindow(Gtk.ApplicationWindow):
     def __init__(self, app: Gtk.Application, parent: Gtk.Window | None = None) -> None:
         super().__init__(application=app)
@@ -168,6 +228,7 @@ class DemonWindow(Gtk.ApplicationWindow):
         self._state = create_initial_state()
         self._card_data_dir = resolve_card_data_dir()
         self._selection: Selection | None = None
+        self._auto_moves_enabled = True
         self._install_selection_css()
 
         root = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
@@ -188,6 +249,11 @@ class DemonWindow(Gtk.ApplicationWindow):
         self._deselect_button.connect("clicked", self._on_deselect_clicked)
         self._deselect_button.set_sensitive(False)
         header.append(self._deselect_button)
+
+        self._auto_move_toggle = Gtk.ToggleButton(label="Auto-Move: On")
+        self._auto_move_toggle.set_active(True)
+        self._auto_move_toggle.connect("toggled", self._on_auto_move_toggled)
+        header.append(self._auto_move_toggle)
 
         new_game_button = Gtk.Button(label="New Game")
         new_game_button.connect("clicked", self._on_new_game_clicked)
@@ -316,11 +382,25 @@ class DemonWindow(Gtk.ApplicationWindow):
         )
         self._apply_mandatory_reserve_moves()
         self._refresh_board()
+        if self._auto_moves_enabled:
+            moves = _collect_auto_moves(
+                self._state.foundations,
+                self._state.tableau,
+                self._state.reserve,
+                self._state.waste,
+                self._state.foundation_base_rank,
+            )
+            self._animate_auto_moves(moves)
 
     def _on_deselect_clicked(self, _button: Gtk.Button) -> None:
         self._selection = None
         self._set_status("Selection cleared")
         self._refresh_board()
+
+    def _on_auto_move_toggled(self, toggle: Gtk.ToggleButton) -> None:
+        self._auto_moves_enabled = toggle.get_active()
+        label = "Auto-Move: On" if self._auto_moves_enabled else "Auto-Move: Off"
+        toggle.set_label(label)
 
     def _install_selection_css(self) -> None:
         css = Gtk.CssProvider()
@@ -402,6 +482,15 @@ class DemonWindow(Gtk.ApplicationWindow):
                 self._apply_mandatory_reserve_moves()
                 self._check_win()
                 self._refresh_board()
+                if self._auto_moves_enabled:
+                    moves = _collect_auto_moves(
+                        self._state.foundations,
+                        self._state.tableau,
+                        self._state.reserve,
+                        self._state.waste,
+                        self._state.foundation_base_rank,
+                    )
+                    self._animate_auto_moves(moves)
             return
 
         source = self._state.foundations[foundation_idx]
@@ -421,6 +510,15 @@ class DemonWindow(Gtk.ApplicationWindow):
                 self._apply_mandatory_reserve_moves()
                 self._check_win()
                 self._refresh_board()
+                if self._auto_moves_enabled:
+                    moves = _collect_auto_moves(
+                        self._state.foundations,
+                        self._state.tableau,
+                        self._state.reserve,
+                        self._state.waste,
+                        self._state.foundation_base_rank,
+                    )
+                    self._animate_auto_moves(moves)
             return
 
         clicked_index = self._tableau_card_index_from_y(pile, y_pos)
@@ -625,6 +723,29 @@ class DemonWindow(Gtk.ApplicationWindow):
         total = sum(len(foundation) for foundation in self._state.foundations)
         if total == 52:
             self._set_status("You win!")
+
+    def _animate_auto_moves(self, moves: list[tuple[str, int, int]]) -> None:
+        """Apply auto-moves one at a time with a short delay between each so
+        the player can see each card slide to its foundation."""
+        if not moves:
+            self._check_win()
+            return
+        source, source_idx, found_idx = moves[0]
+        
+        if source == "reserve":
+            card = self._state.reserve.pop()
+        elif source == "waste":
+            card = self._state.waste.pop()
+        else:  # tableau
+            card = self._state.tableau[source_idx].pop()
+        
+        self._state.foundations[found_idx].append(card)
+        self._refresh_board()
+        GLib.timeout_add(
+            440,
+            lambda: (self._animate_auto_moves(moves[1:]) or False),
+        )
+
 
     def _set_status(self, message: str) -> None:
         self._status.set_text(message)
