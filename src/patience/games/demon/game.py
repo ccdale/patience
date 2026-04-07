@@ -168,10 +168,10 @@ def _collect_auto_moves(
     found_tops: list[Card | None] = [f.peek() for f in foundations]
     moves: list[tuple[str, int, int]] = []
     moved = True
-    
+
     while moved:
         moved = False
-        
+
         # Check reserve first
         card = reserve.peek()
         if card is not None:
@@ -181,10 +181,10 @@ def _collect_auto_moves(
                     found_tops[found_idx] = card
                     moved = True
                     break
-        
+
         if moved:
             continue
-        
+
         # Check waste
         card = waste.peek()
         if card is not None:
@@ -194,10 +194,10 @@ def _collect_auto_moves(
                     found_tops[found_idx] = card
                     moved = True
                     break
-        
+
         if moved:
             continue
-        
+
         # Check tableau
         for tab_idx, tab in enumerate(tableau):
             card = tab.peek()
@@ -211,7 +211,7 @@ def _collect_auto_moves(
                     break
             if moved:
                 break
-    
+
     return moves
 
 
@@ -382,15 +382,7 @@ class DemonWindow(Gtk.ApplicationWindow):
         )
         self._apply_mandatory_reserve_moves()
         self._refresh_board()
-        if self._auto_moves_enabled:
-            moves = _collect_auto_moves(
-                self._state.foundations,
-                self._state.tableau,
-                self._state.reserve,
-                self._state.waste,
-                self._state.foundation_base_rank,
-            )
-            self._animate_auto_moves(moves)
+        self._run_auto_moves_if_enabled()
 
     def _on_deselect_clicked(self, _button: Gtk.Button) -> None:
         self._selection = None
@@ -449,6 +441,7 @@ class DemonWindow(Gtk.ApplicationWindow):
             self._selection = None
             self._apply_mandatory_reserve_moves()
             self._refresh_board()
+            self._run_auto_moves_if_enabled()
 
     def _on_reserve_clicked(self) -> None:
         if len(self._state.reserve) == 0:
@@ -482,15 +475,7 @@ class DemonWindow(Gtk.ApplicationWindow):
                 self._apply_mandatory_reserve_moves()
                 self._check_win()
                 self._refresh_board()
-                if self._auto_moves_enabled:
-                    moves = _collect_auto_moves(
-                        self._state.foundations,
-                        self._state.tableau,
-                        self._state.reserve,
-                        self._state.waste,
-                        self._state.foundation_base_rank,
-                    )
-                    self._animate_auto_moves(moves)
+                self._run_auto_moves_if_enabled()
             return
 
         source = self._state.foundations[foundation_idx]
@@ -510,15 +495,7 @@ class DemonWindow(Gtk.ApplicationWindow):
                 self._apply_mandatory_reserve_moves()
                 self._check_win()
                 self._refresh_board()
-                if self._auto_moves_enabled:
-                    moves = _collect_auto_moves(
-                        self._state.foundations,
-                        self._state.tableau,
-                        self._state.reserve,
-                        self._state.waste,
-                        self._state.foundation_base_rank,
-                    )
-                    self._animate_auto_moves(moves)
+                self._run_auto_moves_if_enabled()
             return
 
         clicked_index = self._tableau_card_index_from_y(pile, y_pos)
@@ -731,21 +708,32 @@ class DemonWindow(Gtk.ApplicationWindow):
             self._check_win()
             return
         source, source_idx, found_idx = moves[0]
-        
+
         if source == "reserve":
             card = self._state.reserve.pop()
         elif source == "waste":
             card = self._state.waste.pop()
         else:  # tableau
             card = self._state.tableau[source_idx].pop()
-        
+
         self._state.foundations[found_idx].append(card)
         self._refresh_board()
         GLib.timeout_add(
             440,
-            lambda: (self._animate_auto_moves(moves[1:]) or False),
+            lambda: self._animate_auto_moves(moves[1:]) or False,
         )
 
+    def _run_auto_moves_if_enabled(self) -> None:
+        if not self._auto_moves_enabled:
+            return
+        moves = _collect_auto_moves(
+            self._state.foundations,
+            self._state.tableau,
+            self._state.reserve,
+            self._state.waste,
+            self._state.foundation_base_rank,
+        )
+        self._animate_auto_moves(moves)
 
     def _set_status(self, message: str) -> None:
         self._status.set_text(message)

@@ -1,6 +1,8 @@
 from ccacards.card import Card
+from ccacards.pile import Pile
 
 from patience.games.demon.game import (
+    _collect_auto_moves,
     can_place_on_foundation,
     can_place_on_tableau,
     create_initial_state,
@@ -91,3 +93,30 @@ def test_stock_draw_and_redeal_round_trip_cards() -> None:
     assert len(state.waste) == 0
     assert len(state.stock) == stock_before
     assert all(card.facedown for card in state.stock.cards)
+
+
+def test_collect_auto_moves_includes_waste_top_card() -> None:
+    foundations = tuple(Pile() for _ in range(4))
+    tableau = tuple(Pile() for _ in range(4))
+    reserve = Pile()
+    waste = Pile()
+
+    ace_spades = Card(1)
+    two_spades = Card(2)
+    if ace_spades.facedown:
+        ace_spades.flip()
+    if two_spades.facedown:
+        two_spades.flip()
+
+    foundations[0].append(ace_spades)
+    waste.append(two_spades)
+
+    moves = _collect_auto_moves(
+        foundations=foundations,
+        tableau=tableau,
+        reserve=reserve,
+        waste=waste,
+        foundation_base_rank=0,
+    )
+
+    assert moves == [("waste", 0, 0)]
