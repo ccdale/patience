@@ -15,6 +15,11 @@ FACE_DOWN_OVERLAP = 22  # px of a face-down card visible beneath the next
 FACE_UP_OVERLAP = 38  # px of a face-up card visible beneath the next
 
 
+def format_card_count(count: int) -> str:
+    noun = "card" if count == 1 else "cards"
+    return f"{count} {noun}"
+
+
 def build_named_pile(
     title: str,
     pile: Pile,
@@ -41,7 +46,7 @@ def build_named_pile(
 
     box.append(card_builder(pile.peek()))
 
-    count = Gtk.Label(label=f"{len(pile)} cards")
+    count = Gtk.Label(label=format_card_count(len(pile)))
     count.add_css_class("dim-label")
     count.add_css_class("caption")
     count.set_halign(Gtk.Align.START)

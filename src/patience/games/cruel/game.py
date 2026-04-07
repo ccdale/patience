@@ -12,7 +12,7 @@ from gi.repository import Gdk, GLib, Gtk  # noqa: E402
 
 from patience.ui.cards import CARD_W, build_card_widget, resolve_card_data_dir
 from patience.ui.help import build_rules_panel
-from patience.ui.piles import TABLEAU_COL_GAP, build_named_pile
+from patience.ui.piles import TABLEAU_COL_GAP, build_named_pile, format_card_count
 
 TABLEAU_COLS = 12
 PILE_SIZE = 4
@@ -290,7 +290,7 @@ class CruelWindow(Gtk.ApplicationWindow):
 
         box.append(self._card_widget(pile.peek()))
 
-        count = Gtk.Label(label=f"{len(pile)} cards")
+        count = Gtk.Label(label=format_card_count(len(pile)))
         count.add_css_class("dim-label")
         count.add_css_class("caption")
         count.set_halign(Gtk.Align.START)
