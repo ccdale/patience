@@ -10,9 +10,12 @@ gi.require_version("Gtk", "4.0")
 
 from gi.repository import Gdk, GLib, Gtk  # noqa: E402
 
+from patience.stats import load_stats, record_started, record_won
 from patience.ui.cards import CARD_W, build_card_widget, resolve_card_data_dir
 from patience.ui.help import build_rules_panel
 from patience.ui.piles import TABLEAU_COL_GAP, build_named_pile, format_card_count
+
+GAME_ID = "cruel"
 
 TABLEAU_COLS = 12
 PILE_SIZE = 4
@@ -177,6 +180,7 @@ class CruelWindow(Gtk.ApplicationWindow):
         self._card_data_dir = resolve_card_data_dir()
         self._selection: Selection | None = None
         self._install_css()
+        self._stats_started, self._stats_won = record_started(GAME_ID)
 
         root = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
         root.set_margin_top(18)
@@ -208,10 +212,18 @@ class CruelWindow(Gtk.ApplicationWindow):
 
         root.append(header)
 
+        status_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
         self._status = Gtk.Label(label="Same suit, one rank lower. Redeal to regroup.")
         self._status.add_css_class("dim-label")
         self._status.set_halign(Gtk.Align.START)
-        root.append(self._status)
+        self._status.set_hexpand(True)
+        status_row.append(self._status)
+        self._stats_label = Gtk.Label()
+        self._stats_label.add_css_class("dim-label")
+        self._stats_label.set_halign(Gtk.Align.END)
+        status_row.append(self._stats_label)
+        root.append(status_row)
+        self._update_stats_label()
 
         root.append(
             build_rules_panel(
@@ -325,6 +337,8 @@ class CruelWindow(Gtk.ApplicationWindow):
         self._state = create_initial_state()
         self._selection = None
         self._redeal_btn.set_sensitive(True)
+        self._stats_started, self._stats_won = record_started(GAME_ID)
+        self._update_stats_label()
         self._set_status("Same suit, one rank lower. Redeal to regroup.")
         self._refresh_board()
         moves = _collect_auto_moves(self._state.foundations, self._state.tableau)
@@ -438,9 +452,14 @@ class CruelWindow(Gtk.ApplicationWindow):
     def _check_win(self) -> bool:
         total = sum(len(f) for f in self._state.foundations)
         if total == 52:
+            self._stats_started, self._stats_won = record_won(GAME_ID)
+            self._update_stats_label()
             self._set_status("You win! 🎉")
             return True
         return False
+
+    def _update_stats_label(self) -> None:
+        self._stats_label.set_text(f"{self._stats_won}/{self._stats_started}")
 
     def _set_redeal_prompt_if_stuck(self) -> None:
         if not _has_valid_moves(self._state.foundations, self._state.tableau):

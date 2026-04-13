@@ -10,6 +10,7 @@ gi.require_version("Gdk", "4.0")
 
 from gi.repository import Gdk, Gtk  # noqa: E402
 
+from patience.stats import load_stats, record_started, record_won
 from patience.ui.cards import build_card_widget, resolve_card_data_dir  # noqa: E402
 from patience.ui.help import build_rules_panel  # noqa: E402
 from patience.ui.piles import (  # noqa: E402
@@ -17,6 +18,8 @@ from patience.ui.piles import (  # noqa: E402
     build_named_pile,
     build_tableau_column,
 )
+
+GAME_ID = "patience"
 
 DRAW_COUNT = 3
 
@@ -133,6 +136,7 @@ class PatienceWindow(Gtk.ApplicationWindow):
         self._card_data_dir = resolve_card_data_dir()
         self._selection: Selection | None = None
         self._install_selection_css()
+        self._stats_started, self._stats_won = record_started(GAME_ID)
 
         root = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
         root.set_margin_top(18)
@@ -159,10 +163,18 @@ class PatienceWindow(Gtk.ApplicationWindow):
 
         root.append(header)
 
+        status_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
         self._status = Gtk.Label(label="Draw-3, unlimited redeals, auto-foundation")
         self._status.add_css_class("dim-label")
         self._status.set_halign(Gtk.Align.START)
-        root.append(self._status)
+        self._status.set_hexpand(True)
+        status_row.append(self._status)
+        self._stats_label = Gtk.Label()
+        self._stats_label.add_css_class("dim-label")
+        self._stats_label.set_halign(Gtk.Align.END)
+        status_row.append(self._stats_label)
+        root.append(status_row)
+        self._update_stats_label()
 
         root.append(
             build_rules_panel(
@@ -267,6 +279,8 @@ class PatienceWindow(Gtk.ApplicationWindow):
     def _on_new_game_clicked(self, _button: Gtk.Button) -> None:
         self._state = create_initial_state()
         self._selection = None
+        self._stats_started, self._stats_won = record_started(GAME_ID)
+        self._update_stats_label()
         self._set_status("Draw-3, unlimited redeals, auto-foundation")
         self._refresh_board()
 
@@ -436,6 +450,16 @@ class PatienceWindow(Gtk.ApplicationWindow):
         self._post_source_cleanup(selection)
         return True
 
+    def _check_win(self) -> None:
+        total = sum(len(f) for f in self._state.foundations)
+        if total == 52:
+            self._stats_started, self._stats_won = record_won(GAME_ID)
+            self._update_stats_label()
+            self._set_status("You win!")
+
+    def _update_stats_label(self) -> None:
+        self._stats_label.set_text(f"{self._stats_won}/{self._stats_started}")
+
     def _auto_move_to_foundations(self) -> None:
         moved = True
         while moved:
@@ -463,6 +487,7 @@ class PatienceWindow(Gtk.ApplicationWindow):
                     pile.peek().flip()
                 moved = True
                 break
+        self._check_win()
 
     def _find_foundation_for_card(self, card: Card) -> int | None:
         for idx, foundation in enumerate(self._state.foundations):

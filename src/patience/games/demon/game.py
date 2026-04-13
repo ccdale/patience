@@ -10,9 +10,12 @@ gi.require_version("Gtk", "4.0")
 
 from gi.repository import Gdk, GLib, Gtk  # noqa: E402
 
+from patience.stats import load_stats, record_started, record_won
 from patience.ui.cards import build_card_widget, resolve_card_data_dir
 from patience.ui.help import build_rules_panel
 from patience.ui.piles import TABLEAU_COL_GAP, build_named_pile, build_tableau_column
+
+GAME_ID = "demon"
 
 DRAW_COUNT = 3
 RESERVE_SIZE = 13
@@ -374,6 +377,7 @@ class DemonWindow(Gtk.ApplicationWindow):
         self._selection: Selection | None = None
         self._auto_moves_enabled = True
         self._install_selection_css()
+        self._stats_started, self._stats_won = record_started(GAME_ID)
 
         root = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
         root.set_margin_top(18)
@@ -405,12 +409,20 @@ class DemonWindow(Gtk.ApplicationWindow):
 
         root.append(header)
 
+        status_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
         self._status = Gtk.Label(
             label="Base-rank foundations, draw-3 stock, reserve fills gaps first"
         )
         self._status.add_css_class("dim-label")
         self._status.set_halign(Gtk.Align.START)
-        root.append(self._status)
+        self._status.set_hexpand(True)
+        status_row.append(self._status)
+        self._stats_label = Gtk.Label()
+        self._stats_label.add_css_class("dim-label")
+        self._stats_label.set_halign(Gtk.Align.END)
+        status_row.append(self._stats_label)
+        root.append(status_row)
+        self._update_stats_label()
 
         root.append(
             build_rules_panel(
@@ -521,6 +533,8 @@ class DemonWindow(Gtk.ApplicationWindow):
     def _on_new_game_clicked(self, _button: Gtk.Button) -> None:
         self._state = create_initial_state()
         self._selection = None
+        self._stats_started, self._stats_won = record_started(GAME_ID)
+        self._update_stats_label()
         self._set_status(
             "Base-rank foundations, draw-3 stock, reserve fills gaps first"
         )
@@ -844,10 +858,15 @@ class DemonWindow(Gtk.ApplicationWindow):
     def _check_end_of_game(self) -> None:
         total = sum(len(foundation) for foundation in self._state.foundations)
         if total == 52:
+            self._stats_started, self._stats_won = record_won(GAME_ID)
+            self._update_stats_label()
             self._set_status("You win!")
             return
         if is_stalemate(self._state):
             self._set_status("No possible moves - game over.")
+
+    def _update_stats_label(self) -> None:
+        self._stats_label.set_text(f"{self._stats_won}/{self._stats_started}")
 
     def _animate_auto_moves(self, moves: list[tuple[str, int, int]]) -> None:
         """Apply auto-moves one at a time with a short delay between each so
