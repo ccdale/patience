@@ -20,7 +20,7 @@ def load_stats(game_id: str) -> tuple[int, int]:
     try:
         data = json.loads(path.read_text())
         return int(data.get("started", 0)), int(data.get("won", 0))
-    except (json.JSONDecodeError, ValueError, OSError):
+    except json.JSONDecodeError, ValueError, OSError:
         return 0, 0
 
 
