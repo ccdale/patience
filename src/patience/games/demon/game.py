@@ -376,6 +376,7 @@ class DemonWindow(Gtk.ApplicationWindow):
         self._card_data_dir = resolve_card_data_dir()
         self._selection: Selection | None = None
         self._auto_moves_enabled = True
+        self._move_seen_this_round: bool = False
         self._install_selection_css()
         self._stats_started, self._stats_won = record_started(GAME_ID)
 
@@ -533,6 +534,7 @@ class DemonWindow(Gtk.ApplicationWindow):
     def _on_new_game_clicked(self, _button: Gtk.Button) -> None:
         self._state = create_initial_state()
         self._selection = None
+        self._move_seen_this_round = False
         self._stats_started, self._stats_won = record_started(GAME_ID)
         self._update_stats_label()
         self._set_status(
@@ -592,15 +594,47 @@ class DemonWindow(Gtk.ApplicationWindow):
         return selection.start_index
 
     def _on_stock_clicked(self) -> None:
-        changed = draw_three_from_stock(self._state.stock, self._state.waste)
-        if not changed:
-            changed = redeal_waste_to_stock(self._state.stock, self._state.waste)
-        if changed:
+        drew = draw_three_from_stock(self._state.stock, self._state.waste)
+        if drew:
+            # Track whether this waste position has any valid move.
+            if _has_any_player_move(
+                self._state.foundations,
+                self._state.tableau,
+                self._state.reserve,
+                self._state.waste,
+                self._state.foundation_base_rank,
+            ):
+                self._move_seen_this_round = True
             self._selection = None
             self._apply_mandatory_reserve_moves()
             self._check_end_of_game()
             self._refresh_board()
             self._run_auto_moves_if_enabled()
+            return
+
+        # Stock was empty — end of a round; try to redeal.
+        if len(self._state.waste) == 0:
+            return  # Both stock and waste empty — nothing to do.
+
+        # Only declare stalemate after a complete round with no valid moves seen.
+        if not self._move_seen_this_round and not _has_any_player_move(
+            self._state.foundations,
+            self._state.tableau,
+            self._state.reserve,
+            self._state.waste,
+            self._state.foundation_base_rank,
+        ):
+            self._selection = None
+            self._set_status("No possible moves — game over.")
+            return
+
+        redeal_waste_to_stock(self._state.stock, self._state.waste)
+        self._move_seen_this_round = False
+        self._selection = None
+        self._apply_mandatory_reserve_moves()
+        self._check_end_of_game()
+        self._refresh_board()
+        self._run_auto_moves_if_enabled()
 
     def _on_reserve_clicked(self) -> None:
         if len(self._state.reserve) == 0:
@@ -630,6 +664,7 @@ class DemonWindow(Gtk.ApplicationWindow):
         if self._selection is not None:
             moved = self._move_selection_to_foundation(foundation_idx)
             if moved:
+                self._move_seen_this_round = True
                 self._selection = None
                 self._apply_mandatory_reserve_moves()
                 self._check_end_of_game()
@@ -650,6 +685,7 @@ class DemonWindow(Gtk.ApplicationWindow):
         if self._selection is not None:
             moved = self._move_selection_to_tableau(tableau_idx)
             if moved:
+                self._move_seen_this_round = True
                 self._selection = None
                 self._apply_mandatory_reserve_moves()
                 self._check_end_of_game()
@@ -862,8 +898,21 @@ class DemonWindow(Gtk.ApplicationWindow):
             self._update_stats_label()
             self._set_status("You win!")
             return
-        if is_stalemate(self._state):
-            self._set_status("No possible moves - game over.")
+        # Stalemate via round tracking is handled in _on_stock_clicked.
+        # Here we only catch the edge case where stock and waste are both
+        # empty and no moves remain (e.g. after auto-moves drain the waste).
+        if (
+            len(self._state.stock) == 0
+            and len(self._state.waste) == 0
+            and not _has_any_player_move(
+                self._state.foundations,
+                self._state.tableau,
+                self._state.reserve,
+                self._state.waste,
+                self._state.foundation_base_rank,
+            )
+        ):
+            self._set_status("No possible moves — game over.")
 
     def _update_stats_label(self) -> None:
         self._stats_label.set_text(f"{self._stats_won}/{self._stats_started}")
