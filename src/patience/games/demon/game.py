@@ -567,6 +567,10 @@ class DemonWindow(Gtk.ApplicationWindow):
                 box-shadow: inset 0 0 0 2px #2a7fff;
                 border-radius: 6px;
             }
+            .status-error {
+                color: #cc0000;
+                font-weight: bold;
+            }
             """
         )
         display = Gdk.Display.get_default()
@@ -625,7 +629,7 @@ class DemonWindow(Gtk.ApplicationWindow):
             self._state.foundation_base_rank,
         ):
             self._selection = None
-            self._set_status("No possible moves — game over.")
+            self._set_status("No possible moves — game over.", error=True)
             return
 
         redeal_waste_to_stock(self._state.stock, self._state.waste)
@@ -912,7 +916,7 @@ class DemonWindow(Gtk.ApplicationWindow):
                 self._state.foundation_base_rank,
             )
         ):
-            self._set_status("No possible moves — game over.")
+            self._set_status("No possible moves — game over.", error=True)
 
     def _update_stats_label(self) -> None:
         self._stats_label.set_text(f"{self._stats_won}/{self._stats_started}")
@@ -952,8 +956,12 @@ class DemonWindow(Gtk.ApplicationWindow):
         )
         self._animate_auto_moves(moves)
 
-    def _set_status(self, message: str) -> None:
+    def _set_status(self, message: str, *, error: bool = False) -> None:
         self._status.set_text(message)
+        if error:
+            self._status.add_css_class("status-error")
+        else:
+            self._status.remove_css_class("status-error")
 
 
 def launch(parent_window: Gtk.Window) -> None:

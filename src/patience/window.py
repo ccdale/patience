@@ -3,6 +3,7 @@ from importlib import resources
 
 import gi
 
+from patience import __version__
 from patience.games.registry import GAME_ICON_FILENAME, GAME_REGISTRY, GameSpec
 
 gi.require_version("Gtk", "4.0")
@@ -13,7 +14,7 @@ from gi.repository import Gtk  # noqa: E402
 class LauncherWindow(Gtk.ApplicationWindow):
     def __init__(self, app: Gtk.Application) -> None:
         super().__init__(application=app)
-        self.set_title("Patience")
+        self.set_title(f"Patience {__version__}")
         self.set_default_size(840, 560)
         self.add_css_class("table-window")
 
