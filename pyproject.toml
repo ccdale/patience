@@ -1,6 +1,6 @@
 [project]
 name = "patience"
-version = "0.2.16"
+version = "0.2.18"
 description = "single player card games gtk4 interface"
 readme = "README.md"
 license = {text = "GPL-3.0-only"}
@@ -13,6 +13,7 @@ dependencies = [
 [dependency-groups]
 dev = [
 	"pytest>=8.3.4,<9.0.0",
+	"ruff>=0.15.12",
 ]
 
 [project.scripts]
