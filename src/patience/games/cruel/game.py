@@ -12,7 +12,11 @@ from gi.repository import Gdk, GLib, Gtk  # noqa: E402
 
 from patience.games.undo import clone_game_state  # noqa: E402
 from patience.stats import record_started, record_won  # noqa: E402
-from patience.ui.cards import CARD_W, build_card_widget, resolve_card_data_dir  # noqa: E402
+from patience.ui.cards import (  # noqa: E402
+    CARD_W,
+    build_card_widget,
+    resolve_card_data_dir,
+)
 from patience.ui.help import build_rules_panel  # noqa: E402
 from patience.ui.piles import (  # noqa: E402
     TABLEAU_COL_GAP,
