@@ -169,7 +169,10 @@ def _collect_auto_moves(
     """Simulate the auto-move cascade and return an ordered list of
     (source, source_idx, foundation_idx) tuples without modifying state.
     Checks reserve first, then waste, then tableau."""
-    found_tops: list[Card | None] = [f.peek() for f in foundations]
+    sim_foundations = [list(f.cards) for f in foundations]
+    sim_tableau = [list(pile.cards) for pile in tableau]
+    sim_reserve = list(reserve.cards)
+    sim_waste = list(waste.cards)
     moves: list[tuple[str, int, int]] = []
     moved = True
 
@@ -177,12 +180,14 @@ def _collect_auto_moves(
         moved = False
 
         # Check reserve first
-        card = reserve.peek()
+        card = sim_reserve[-1] if sim_reserve else None
         if card is not None:
-            for found_idx, found_top in enumerate(found_tops):
+            for found_idx, foundation in enumerate(sim_foundations):
+                found_top = foundation[-1] if foundation else None
                 if can_place_on_foundation(card, found_top, foundation_base_rank):
                     moves.append(("reserve", 0, found_idx))
-                    found_tops[found_idx] = card
+                    sim_reserve.pop()
+                    foundation.append(card)
                     moved = True
                     break
 
@@ -190,12 +195,14 @@ def _collect_auto_moves(
             continue
 
         # Check waste
-        card = waste.peek()
+        card = sim_waste[-1] if sim_waste else None
         if card is not None:
-            for found_idx, found_top in enumerate(found_tops):
+            for found_idx, foundation in enumerate(sim_foundations):
+                found_top = foundation[-1] if foundation else None
                 if can_place_on_foundation(card, found_top, foundation_base_rank):
                     moves.append(("waste", 0, found_idx))
-                    found_tops[found_idx] = card
+                    sim_waste.pop()
+                    foundation.append(card)
                     moved = True
                     break
 
@@ -203,14 +210,16 @@ def _collect_auto_moves(
             continue
 
         # Check tableau
-        for tab_idx, tab in enumerate(tableau):
-            card = tab.peek()
+        for tab_idx, tab_cards in enumerate(sim_tableau):
+            card = tab_cards[-1] if tab_cards else None
             if card is None:
                 continue
-            for found_idx, found_top in enumerate(found_tops):
+            for found_idx, foundation in enumerate(sim_foundations):
+                found_top = foundation[-1] if foundation else None
                 if can_place_on_foundation(card, found_top, foundation_base_rank):
                     moves.append(("tableau", tab_idx, found_idx))
-                    found_tops[found_idx] = card
+                    tab_cards.pop()
+                    foundation.append(card)
                     moved = True
                     break
             if moved:
@@ -977,17 +986,23 @@ class DemonWindow(Gtk.ApplicationWindow):
         self._auto_move_generation += 1
         generation = self._auto_move_generation
         self._update_action_buttons()
-        self._animate_auto_moves(moves, generation)
+        self._animate_auto_moves(generation)
 
     def _animate_auto_moves(
         self,
-        moves: list[tuple[str, int, int]],
         generation: int,
     ) -> bool:
         """Apply auto-moves one at a time with a short delay between each so
         the player can see each card slide to its foundation."""
         if generation != self._auto_move_generation:
             return False
+        moves = _collect_auto_moves(
+            self._state.foundations,
+            self._state.tableau,
+            self._state.reserve,
+            self._state.waste,
+            self._state.foundation_base_rank,
+        )
         if not moves:
             self._auto_moves_pending = False
             self._update_action_buttons()
@@ -1007,7 +1022,7 @@ class DemonWindow(Gtk.ApplicationWindow):
         self._refresh_board()
         GLib.timeout_add(
             440,
-            lambda: self._animate_auto_moves(moves[1:], generation) or False,
+            lambda: self._animate_auto_moves(generation) or False,
         )
         return False
 

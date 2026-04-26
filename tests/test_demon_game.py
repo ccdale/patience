@@ -125,6 +125,33 @@ def test_collect_auto_moves_includes_waste_top_card() -> None:
     assert moves == [("waste", 0, 0)]
 
 
+def test_collect_auto_moves_consumes_source_cards_in_simulation() -> None:
+    foundations = tuple(Pile() for _ in range(4))
+    tableau = tuple(Pile() for _ in range(4))
+    reserve = Pile()
+    waste = Pile()
+
+    two_clubs = Card(41)
+    ace_hearts = Card(14)
+    if two_clubs.facedown:
+        two_clubs.flip()
+    if ace_hearts.facedown:
+        ace_hearts.flip()
+
+    reserve.append(two_clubs)
+    reserve.append(ace_hearts)
+
+    moves = _collect_auto_moves(
+        foundations=foundations,
+        tableau=tableau,
+        reserve=reserve,
+        waste=waste,
+        foundation_base_rank=0,
+    )
+
+    assert moves == [("reserve", 0, 0)]
+
+
 def test_has_move_during_stock_pass_detects_future_waste_move() -> None:
     stock = Pile()
     waste = Pile()
