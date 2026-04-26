@@ -423,6 +423,12 @@ class DemonWindow(Gtk.ApplicationWindow):
         self._auto_move_toggle.connect("toggled", self._on_auto_move_toggled)
         header.append(self._auto_move_toggle)
 
+        self._auto_move_light = Gtk.Box()
+        self._auto_move_light.set_size_request(14, 14)
+        self._auto_move_light.add_css_class("auto-move-light")
+        self._auto_move_light.set_tooltip_text("Auto-move idle: your turn")
+        header.append(self._auto_move_light)
+
         new_game_button = Gtk.Button(label="New Game")
         new_game_button.connect("clicked", self._on_new_game_clicked)
         header.append(new_game_button)
@@ -479,6 +485,7 @@ class DemonWindow(Gtk.ApplicationWindow):
         self._undo_button.set_sensitive(
             bool(self._undo_stack) and not self._auto_moves_pending
         )
+        self._update_auto_move_light()
 
     def _build_board(self) -> Gtk.Widget:
         outer = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=14)
@@ -613,6 +620,19 @@ class DemonWindow(Gtk.ApplicationWindow):
             .status-error {
                 color: #cc0000;
                 font-weight: bold;
+            }
+            .auto-move-light {
+                border-radius: 7px;
+                background: #2f9e44;
+                border: 1px solid #1f6f2f;
+            }
+            .auto-move-running {
+                background: #d94848;
+                border: 1px solid #9e2f2f;
+            }
+            .auto-move-ready {
+                background: #2f9e44;
+                border: 1px solid #1f6f2f;
             }
             """
         )
@@ -827,6 +847,18 @@ class DemonWindow(Gtk.ApplicationWindow):
 
     def _push_undo_state(self) -> None:
         self._undo_stack.append(self._make_undo_entry())
+
+    def _update_auto_move_light(self) -> None:
+        is_running = self._auto_moves_pending
+        if is_running:
+            self._auto_move_light.remove_css_class("auto-move-ready")
+            self._auto_move_light.add_css_class("auto-move-running")
+            self._auto_move_light.set_tooltip_text("Auto-move running: please wait")
+            return
+
+        self._auto_move_light.remove_css_class("auto-move-running")
+        self._auto_move_light.add_css_class("auto-move-ready")
+        self._auto_move_light.set_tooltip_text("Auto-move idle: your turn")
 
     def _cancel_auto_moves(self) -> None:
         self._auto_move_generation += 1
