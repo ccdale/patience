@@ -5,6 +5,7 @@ from ccacards.card import Card
 from ccacards.pack import Pack
 from ccacards.pile import Pile
 
+from patience.games.undo import clone_game_state
 from patience.stats import record_started, record_won
 from patience.ui.cards import build_card_widget, resolve_card_data_dir
 from patience.ui.help import build_rules_panel
@@ -375,8 +376,12 @@ class DemonWindow(Gtk.ApplicationWindow):
         self._state = create_initial_state()
         self._card_data_dir = resolve_card_data_dir()
         self._selection: Selection | None = None
+        self._undo_stack: list[tuple[DemonState, bool]] = []
         self._auto_moves_enabled = True
+        self._auto_moves_pending = False
+        self._auto_move_generation = 0
         self._move_seen_this_round: bool = False
+        self._won_this_round = False
         self._install_selection_css()
         self._stats_started, self._stats_won = record_started(GAME_ID)
 
@@ -398,6 +403,11 @@ class DemonWindow(Gtk.ApplicationWindow):
         self._deselect_button.connect("clicked", self._on_deselect_clicked)
         self._deselect_button.set_sensitive(False)
         header.append(self._deselect_button)
+
+        self._undo_button = Gtk.Button(label="Undo Last Move")
+        self._undo_button.connect("clicked", self._on_undo_clicked)
+        self._undo_button.set_sensitive(False)
+        header.append(self._undo_button)
 
         self._auto_move_toggle = Gtk.ToggleButton(label="Auto-Move: On")
         self._auto_move_toggle.set_active(True)
@@ -453,7 +463,13 @@ class DemonWindow(Gtk.ApplicationWindow):
             self._board.remove(child)
             child = nxt
         self._board.append(self._build_board())
+        self._update_action_buttons()
+
+    def _update_action_buttons(self) -> None:
         self._deselect_button.set_sensitive(self._selection is not None)
+        self._undo_button.set_sensitive(
+            bool(self._undo_stack) and not self._auto_moves_pending
+        )
 
     def _build_board(self) -> Gtk.Widget:
         outer = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=14)
@@ -532,9 +548,12 @@ class DemonWindow(Gtk.ApplicationWindow):
         return build_card_widget(card, self._card_data_dir)
 
     def _on_new_game_clicked(self, _button: Gtk.Button) -> None:
+        self._cancel_auto_moves()
         self._state = create_initial_state()
         self._selection = None
+        self._undo_stack.clear()
         self._move_seen_this_round = False
+        self._won_this_round = False
         self._stats_started, self._stats_won = record_started(GAME_ID)
         self._update_stats_label()
         self._set_status(
@@ -549,10 +568,25 @@ class DemonWindow(Gtk.ApplicationWindow):
         self._set_status("Selection cleared")
         self._refresh_board()
 
+    def _on_undo_clicked(self, _button: Gtk.Button) -> None:
+        if not self._undo_stack or self._auto_moves_pending:
+            return
+        self._cancel_auto_moves()
+        state, move_seen_this_round = self._undo_stack.pop()
+        self._state = clone_game_state(state)
+        self._move_seen_this_round = move_seen_this_round
+        self._selection = None
+        self._set_status("Undid last move")
+        self._refresh_board()
+
     def _on_auto_move_toggled(self, toggle: Gtk.ToggleButton) -> None:
         self._auto_moves_enabled = toggle.get_active()
         label = "Auto-Move: On" if self._auto_moves_enabled else "Auto-Move: Off"
         toggle.set_label(label)
+        if self._auto_moves_enabled:
+            self._run_auto_moves_if_enabled()
+        else:
+            self._cancel_auto_moves()
 
     def _install_selection_css(self) -> None:
         css = Gtk.CssProvider()
@@ -598,8 +632,10 @@ class DemonWindow(Gtk.ApplicationWindow):
         return selection.start_index
 
     def _on_stock_clicked(self) -> None:
+        snapshot = self._make_undo_entry()
         drew = draw_three_from_stock(self._state.stock, self._state.waste)
         if drew:
+            self._undo_stack.append(snapshot)
             # Track whether this waste position has any valid move.
             if _has_any_player_move(
                 self._state.foundations,
@@ -632,6 +668,7 @@ class DemonWindow(Gtk.ApplicationWindow):
             self._set_status("No possible moves — game over.", error=True)
             return
 
+        self._undo_stack.append(snapshot)
         redeal_waste_to_stock(self._state.stock, self._state.waste)
         self._move_seen_this_round = False
         self._selection = None
@@ -733,6 +770,7 @@ class DemonWindow(Gtk.ApplicationWindow):
             self._set_status("Illegal move to foundation")
             return False
 
+        self._push_undo_state()
         moved = self._pop_selected_cards(selection)
         if len(moved) != 1:
             return False
@@ -768,11 +806,23 @@ class DemonWindow(Gtk.ApplicationWindow):
                 self._set_status("Illegal move to tableau")
                 return False
 
+        self._push_undo_state()
         moved = self._pop_selected_cards(selection)
         for card in moved:
             dest.append(card)
         self._post_source_cleanup(selection)
         return True
+
+    def _make_undo_entry(self) -> tuple[DemonState, bool]:
+        return clone_game_state(self._state), self._move_seen_this_round
+
+    def _push_undo_state(self) -> None:
+        self._undo_stack.append(self._make_undo_entry())
+
+    def _cancel_auto_moves(self) -> None:
+        self._auto_move_generation += 1
+        self._auto_moves_pending = False
+        self._update_action_buttons()
 
     def _can_fill_empty_tableau(self, selection: Selection) -> bool:
         if len(self._state.reserve) > 0:
@@ -897,7 +947,8 @@ class DemonWindow(Gtk.ApplicationWindow):
 
     def _check_end_of_game(self) -> None:
         total = sum(len(foundation) for foundation in self._state.foundations)
-        if total == 52:
+        if total == 52 and not self._won_this_round:
+            self._won_this_round = True
             self._stats_started, self._stats_won = record_won(GAME_ID)
             self._update_stats_label()
             self._set_status("You win!")
@@ -921,12 +972,27 @@ class DemonWindow(Gtk.ApplicationWindow):
     def _update_stats_label(self) -> None:
         self._stats_label.set_text(f"{self._stats_won}/{self._stats_started}")
 
-    def _animate_auto_moves(self, moves: list[tuple[str, int, int]]) -> None:
+    def _start_auto_moves(self, moves: list[tuple[str, int, int]]) -> None:
+        self._auto_moves_pending = bool(moves)
+        self._auto_move_generation += 1
+        generation = self._auto_move_generation
+        self._update_action_buttons()
+        self._animate_auto_moves(moves, generation)
+
+    def _animate_auto_moves(
+        self,
+        moves: list[tuple[str, int, int]],
+        generation: int,
+    ) -> bool:
         """Apply auto-moves one at a time with a short delay between each so
         the player can see each card slide to its foundation."""
+        if generation != self._auto_move_generation:
+            return False
         if not moves:
+            self._auto_moves_pending = False
+            self._update_action_buttons()
             self._check_end_of_game()
-            return
+            return False
         source, source_idx, found_idx = moves[0]
 
         if source == "reserve":
@@ -941,11 +1007,14 @@ class DemonWindow(Gtk.ApplicationWindow):
         self._refresh_board()
         GLib.timeout_add(
             440,
-            lambda: self._run_auto_moves_if_enabled() or False,
+            lambda: self._animate_auto_moves(moves[1:], generation) or False,
         )
+        return False
 
     def _run_auto_moves_if_enabled(self) -> None:
         if not self._auto_moves_enabled:
+            self._auto_moves_pending = False
+            self._update_action_buttons()
             return
         moves = _collect_auto_moves(
             self._state.foundations,
@@ -954,7 +1023,7 @@ class DemonWindow(Gtk.ApplicationWindow):
             self._state.waste,
             self._state.foundation_base_rank,
         )
-        self._animate_auto_moves(moves)
+        self._start_auto_moves(moves)
 
     def _set_status(self, message: str, *, error: bool = False) -> None:
         self._status.set_text(message)

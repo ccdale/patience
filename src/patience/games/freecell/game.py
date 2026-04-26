@@ -10,10 +10,11 @@ gi.require_version("Gtk", "4.0")
 
 from gi.repository import Gdk, Gtk  # noqa: E402
 
-from patience.stats import load_stats, record_started, record_won
-from patience.ui.cards import build_card_widget, resolve_card_data_dir
-from patience.ui.help import build_rules_panel
-from patience.ui.piles import (
+from patience.games.undo import clone_game_state  # noqa: E402
+from patience.stats import record_started, record_won  # noqa: E402
+from patience.ui.cards import build_card_widget, resolve_card_data_dir  # noqa: E402
+from patience.ui.help import build_rules_panel  # noqa: E402
+from patience.ui.piles import (  # noqa: E402
     FACE_UP_OVERLAP,
     TABLEAU_COL_GAP,
     build_named_pile,
@@ -117,6 +118,8 @@ class FreeCellWindow(Gtk.ApplicationWindow):
         self._state = create_initial_state()
         self._card_data_dir = resolve_card_data_dir()
         self._selection: Selection | None = None
+        self._undo_stack: list[FreeCellState] = []
+        self._won_this_round = False
         self._install_selection_css()
         self._stats_started, self._stats_won = record_started(GAME_ID)
 
@@ -138,6 +141,11 @@ class FreeCellWindow(Gtk.ApplicationWindow):
         self._deselect_button.connect("clicked", self._on_deselect_clicked)
         self._deselect_button.set_sensitive(False)
         header.append(self._deselect_button)
+
+        self._undo_button = Gtk.Button(label="Undo Last Move")
+        self._undo_button.connect("clicked", self._on_undo_clicked)
+        self._undo_button.set_sensitive(False)
+        header.append(self._undo_button)
 
         new_game_button = Gtk.Button(label="New Game")
         new_game_button.connect("clicked", self._on_new_game_clicked)
@@ -186,6 +194,7 @@ class FreeCellWindow(Gtk.ApplicationWindow):
             child = nxt
         self._board.append(self._build_board())
         self._deselect_button.set_sensitive(self._selection is not None)
+        self._undo_button.set_sensitive(bool(self._undo_stack))
 
     def _build_board(self) -> Gtk.Widget:
         outer = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=14)
@@ -252,6 +261,8 @@ class FreeCellWindow(Gtk.ApplicationWindow):
     def _on_new_game_clicked(self, _button: Gtk.Button) -> None:
         self._state = create_initial_state()
         self._selection = None
+        self._undo_stack.clear()
+        self._won_this_round = False
         self._stats_started, self._stats_won = record_started(GAME_ID)
         self._update_stats_label()
         self._set_status(
@@ -262,6 +273,14 @@ class FreeCellWindow(Gtk.ApplicationWindow):
     def _on_deselect_clicked(self, _button: Gtk.Button) -> None:
         self._selection = None
         self._set_status("Selection cleared")
+        self._refresh_board()
+
+    def _on_undo_clicked(self, _button: Gtk.Button) -> None:
+        if not self._undo_stack:
+            return
+        self._state = clone_game_state(self._undo_stack.pop())
+        self._selection = None
+        self._set_status("Undid last move")
         self._refresh_board()
 
     def _install_selection_css(self) -> None:
@@ -392,6 +411,7 @@ class FreeCellWindow(Gtk.ApplicationWindow):
             self._set_status("Only single cards can move to a free cell")
             return False
 
+        self._push_undo_state()
         moved = self._pop_selected_cards(selection)
         if len(moved) != 1:
             return False
@@ -416,6 +436,7 @@ class FreeCellWindow(Gtk.ApplicationWindow):
             self._set_status("Illegal move to foundation")
             return False
 
+        self._push_undo_state()
         moved = self._pop_selected_cards(selection)
         if len(moved) != 1:
             return False
@@ -457,10 +478,14 @@ class FreeCellWindow(Gtk.ApplicationWindow):
             self._set_status("Only tableau runs can move multiple cards")
             return False
 
+        self._push_undo_state()
         moved = self._pop_selected_cards(selection)
         for card in moved:
             dest.append(card)
         return True
+
+    def _push_undo_state(self) -> None:
+        self._undo_stack.append(clone_game_state(self._state))
 
     def _count_empty_free_cells(self) -> int:
         return sum(1 for pile in self._state.free_cells if len(pile) == 0)
@@ -544,7 +569,8 @@ class FreeCellWindow(Gtk.ApplicationWindow):
 
     def _check_win(self) -> None:
         total = sum(len(foundation) for foundation in self._state.foundations)
-        if total == 52:
+        if total == 52 and not self._won_this_round:
+            self._won_this_round = True
             self._stats_started, self._stats_won = record_won(GAME_ID)
             self._update_stats_label()
             self._set_status("You win!")

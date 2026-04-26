@@ -10,7 +10,8 @@ gi.require_version("Gdk", "4.0")
 
 from gi.repository import Gdk, Gtk  # noqa: E402
 
-from patience.stats import load_stats, record_started, record_won
+from patience.games.undo import clone_game_state  # noqa: E402
+from patience.stats import record_started, record_won  # noqa: E402
 from patience.ui.cards import build_card_widget, resolve_card_data_dir  # noqa: E402
 from patience.ui.help import build_rules_panel  # noqa: E402
 from patience.ui.piles import (  # noqa: E402
@@ -135,6 +136,8 @@ class PatienceWindow(Gtk.ApplicationWindow):
         self._state = create_initial_state()
         self._card_data_dir = resolve_card_data_dir()
         self._selection: Selection | None = None
+        self._undo_stack: list[PatienceState] = []
+        self._won_this_round = False
         self._install_selection_css()
         self._stats_started, self._stats_won = record_started(GAME_ID)
 
@@ -156,6 +159,11 @@ class PatienceWindow(Gtk.ApplicationWindow):
         self._deselect_button.connect("clicked", self._on_deselect_clicked)
         self._deselect_button.set_sensitive(False)
         header.append(self._deselect_button)
+
+        self._undo_button = Gtk.Button(label="Undo Last Move")
+        self._undo_button.connect("clicked", self._on_undo_clicked)
+        self._undo_button.set_sensitive(False)
+        header.append(self._undo_button)
 
         new_game_button = Gtk.Button(label="New Game")
         new_game_button.connect("clicked", self._on_new_game_clicked)
@@ -202,6 +210,7 @@ class PatienceWindow(Gtk.ApplicationWindow):
             child = nxt
         self._board.append(self._build_board_grid())
         self._deselect_button.set_sensitive(self._selection is not None)
+        self._undo_button.set_sensitive(bool(self._undo_stack))
 
     def _build_board_grid(self) -> Gtk.Widget:
         # Shared 7-column grid:
@@ -279,6 +288,8 @@ class PatienceWindow(Gtk.ApplicationWindow):
     def _on_new_game_clicked(self, _button: Gtk.Button) -> None:
         self._state = create_initial_state()
         self._selection = None
+        self._undo_stack.clear()
+        self._won_this_round = False
         self._stats_started, self._stats_won = record_started(GAME_ID)
         self._update_stats_label()
         self._set_status("Draw-3, unlimited redeals, auto-foundation")
@@ -287,6 +298,14 @@ class PatienceWindow(Gtk.ApplicationWindow):
     def _on_deselect_clicked(self, _button: Gtk.Button) -> None:
         self._selection = None
         self._set_status("Selection cleared")
+        self._refresh_board()
+
+    def _on_undo_clicked(self, _button: Gtk.Button) -> None:
+        if not self._undo_stack:
+            return
+        self._state = clone_game_state(self._undo_stack.pop())
+        self._selection = None
+        self._set_status("Undid last move")
         self._refresh_board()
 
     def _install_selection_css(self) -> None:
@@ -329,10 +348,12 @@ class PatienceWindow(Gtk.ApplicationWindow):
         return selection.start_index
 
     def _on_stock_clicked(self) -> None:
+        snapshot = clone_game_state(self._state)
         changed = draw_three_from_stock(self._state.stock, self._state.waste)
         if not changed:
             changed = redeal_waste_to_stock(self._state.stock, self._state.waste)
         if changed:
+            self._undo_stack.append(snapshot)
             self._selection = None
             self._auto_move_to_foundations()
             self._refresh_board()
@@ -385,6 +406,7 @@ class PatienceWindow(Gtk.ApplicationWindow):
 
         if clicked_card.facedown:
             if clicked_index == len(cards) - 1:
+                self._push_undo_state()
                 clicked_card.flip()
                 self._auto_move_to_foundations()
                 self._refresh_board()
@@ -418,6 +440,7 @@ class PatienceWindow(Gtk.ApplicationWindow):
             self._set_status("Only single cards can move to foundation")
             return False
 
+        self._push_undo_state()
         moved = self._pop_selected_cards(selection)
         if len(moved) != 1:
             return False
@@ -444,15 +467,20 @@ class PatienceWindow(Gtk.ApplicationWindow):
             self._set_status("Illegal move to tableau")
             return False
 
+        self._push_undo_state()
         moved = self._pop_selected_cards(selection)
         for card in moved:
             dest.append(card)
         self._post_source_cleanup(selection)
         return True
 
+    def _push_undo_state(self) -> None:
+        self._undo_stack.append(clone_game_state(self._state))
+
     def _check_win(self) -> None:
         total = sum(len(f) for f in self._state.foundations)
-        if total == 52:
+        if total == 52 and not self._won_this_round:
+            self._won_this_round = True
             self._stats_started, self._stats_won = record_won(GAME_ID)
             self._update_stats_label()
             self._set_status("You win!")

@@ -2,7 +2,6 @@ from ccacards.card import Card
 from ccacards.pile import Pile
 
 from patience.games.cruel.game import (
-    CruelState,
     can_place_on_foundation,
     can_place_on_tableau,
     collect_and_redeal,

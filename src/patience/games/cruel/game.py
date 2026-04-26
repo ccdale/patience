@@ -10,10 +10,15 @@ gi.require_version("Gtk", "4.0")
 
 from gi.repository import Gdk, GLib, Gtk  # noqa: E402
 
-from patience.stats import load_stats, record_started, record_won
-from patience.ui.cards import CARD_W, build_card_widget, resolve_card_data_dir
-from patience.ui.help import build_rules_panel
-from patience.ui.piles import TABLEAU_COL_GAP, build_named_pile, format_card_count
+from patience.games.undo import clone_game_state  # noqa: E402
+from patience.stats import record_started, record_won  # noqa: E402
+from patience.ui.cards import CARD_W, build_card_widget, resolve_card_data_dir  # noqa: E402
+from patience.ui.help import build_rules_panel  # noqa: E402
+from patience.ui.piles import (  # noqa: E402
+    TABLEAU_COL_GAP,
+    build_named_pile,
+    format_card_count,
+)
 
 GAME_ID = "cruel"
 
@@ -179,6 +184,10 @@ class CruelWindow(Gtk.ApplicationWindow):
         self._state = create_initial_state()
         self._card_data_dir = resolve_card_data_dir()
         self._selection: Selection | None = None
+        self._undo_stack: list[tuple[CruelState, bool]] = []
+        self._auto_moves_pending = False
+        self._auto_move_generation = 0
+        self._won_this_round = False
         self._install_css()
         self._stats_started, self._stats_won = record_started(GAME_ID)
 
@@ -201,6 +210,11 @@ class CruelWindow(Gtk.ApplicationWindow):
         self._deselect_btn.connect("clicked", self._on_deselect_clicked)
         self._deselect_btn.set_sensitive(False)
         header.append(self._deselect_btn)
+
+        self._undo_btn = Gtk.Button(label="Undo Last Move")
+        self._undo_btn.connect("clicked", self._on_undo_clicked)
+        self._undo_btn.set_sensitive(False)
+        header.append(self._undo_btn)
 
         self._redeal_btn = Gtk.Button(label="Redeal")
         self._redeal_btn.connect("clicked", self._on_redeal_clicked)
@@ -241,7 +255,7 @@ class CruelWindow(Gtk.ApplicationWindow):
 
         self._refresh_board()
         moves = _collect_auto_moves(self._state.foundations, self._state.tableau)
-        self._animate_auto_moves(moves)
+        self._start_auto_moves(moves)
         self.set_child(root)
 
     # ------------------------------------------------------------------
@@ -255,7 +269,13 @@ class CruelWindow(Gtk.ApplicationWindow):
             self._board.remove(child)
             child = nxt
         self._board.append(self._build_board_grid())
+        self._update_action_buttons()
+
+    def _update_action_buttons(self) -> None:
         self._deselect_btn.set_sensitive(self._selection is not None)
+        self._undo_btn.set_sensitive(
+            bool(self._undo_stack) and not self._auto_moves_pending
+        )
 
     def _build_board_grid(self) -> Gtk.Widget:
         outer = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=14)
@@ -334,22 +354,37 @@ class CruelWindow(Gtk.ApplicationWindow):
     # ------------------------------------------------------------------
 
     def _on_new_game_clicked(self, _button: Gtk.Button) -> None:
+        self._cancel_auto_moves()
         self._state = create_initial_state()
         self._selection = None
+        self._undo_stack.clear()
         self._redeal_btn.set_sensitive(True)
+        self._won_this_round = False
         self._stats_started, self._stats_won = record_started(GAME_ID)
         self._update_stats_label()
         self._set_status("Same suit, one rank lower. Redeal to regroup.")
         self._refresh_board()
         moves = _collect_auto_moves(self._state.foundations, self._state.tableau)
-        self._animate_auto_moves(moves)
+        self._start_auto_moves(moves)
 
     def _on_deselect_clicked(self, _button: Gtk.Button) -> None:
         self._selection = None
         self._set_status("Selection cleared")
         self._refresh_board()
 
+    def _on_undo_clicked(self, _button: Gtk.Button) -> None:
+        if not self._undo_stack or self._auto_moves_pending:
+            return
+        self._cancel_auto_moves()
+        state, redeal_enabled = self._undo_stack.pop()
+        self._state = clone_game_state(state)
+        self._selection = None
+        self._redeal_btn.set_sensitive(redeal_enabled)
+        self._set_status("Undid last move")
+        self._refresh_board()
+
     def _on_redeal_clicked(self, _button: Gtk.Button) -> None:
+        self._push_undo_state()
         collect_and_redeal(self._state.tableau)
         self._selection = None
         if not _has_valid_moves(self._state.foundations, self._state.tableau):
@@ -362,7 +397,7 @@ class CruelWindow(Gtk.ApplicationWindow):
         self._set_status("Redealt.")
         self._refresh_board()
         moves = _collect_auto_moves(self._state.foundations, self._state.tableau)
-        self._animate_auto_moves(moves)
+        self._start_auto_moves(moves)
 
     def _on_foundation_clicked(self, foundation_idx: int) -> None:
         if self._selection is None:
@@ -374,11 +409,12 @@ class CruelWindow(Gtk.ApplicationWindow):
             return
         dest = self._state.foundations[foundation_idx]
         if can_place_on_foundation(card, dest.peek()):
+            self._push_undo_state()
             dest.append(sel_pile.pop())
             self._selection = None
             self._refresh_board()
             moves = _collect_auto_moves(self._state.foundations, self._state.tableau)
-            self._animate_auto_moves(moves, check_win=True, check_redeal_prompt=True)
+            self._start_auto_moves(moves, check_win=True, check_redeal_prompt=True)
         else:
             self._set_status("Illegal move to foundation")
 
@@ -396,15 +432,14 @@ class CruelWindow(Gtk.ApplicationWindow):
             src_pile = self._state.tableau[self._selection.pile_index]
             card = src_pile.peek()
             if card is not None and can_place_on_tableau(card, pile.peek()):
+                self._push_undo_state()
                 pile.append(src_pile.pop())
                 self._selection = None
                 self._refresh_board()
                 moves = _collect_auto_moves(
                     self._state.foundations, self._state.tableau
                 )
-                self._animate_auto_moves(
-                    moves, check_win=True, check_redeal_prompt=True
-                )
+                self._start_auto_moves(moves, check_win=True, check_redeal_prompt=True)
             else:
                 self._set_status("Illegal move")
             return
@@ -420,21 +455,53 @@ class CruelWindow(Gtk.ApplicationWindow):
     # Helpers
     # ------------------------------------------------------------------
 
-    def _animate_auto_moves(
+    def _push_undo_state(self) -> None:
+        self._undo_stack.append(
+            (clone_game_state(self._state), self._redeal_btn.get_sensitive())
+        )
+
+    def _cancel_auto_moves(self) -> None:
+        self._auto_move_generation += 1
+        self._auto_moves_pending = False
+        self._update_action_buttons()
+
+    def _start_auto_moves(
         self,
         moves: list[tuple[int, int]],
         check_win: bool = False,
         check_redeal_prompt: bool = False,
     ) -> None:
+        self._auto_moves_pending = bool(moves)
+        self._auto_move_generation += 1
+        generation = self._auto_move_generation
+        self._update_action_buttons()
+        self._animate_auto_moves(
+            moves,
+            check_win=check_win,
+            check_redeal_prompt=check_redeal_prompt,
+            generation=generation,
+        )
+
+    def _animate_auto_moves(
+        self,
+        moves: list[tuple[int, int]],
+        check_win: bool = False,
+        check_redeal_prompt: bool = False,
+        generation: int = 0,
+    ) -> bool:
         """Apply auto-moves one at a time with a short delay between each so
         the player can see each card slide to its foundation."""
+        if generation != self._auto_move_generation:
+            return False
         if not moves:
+            self._auto_moves_pending = False
+            self._update_action_buttons()
             won = False
             if check_win:
                 won = self._check_win()
             if check_redeal_prompt and not won:
                 self._set_redeal_prompt_if_stuck()
-            return
+            return False
         tab_idx, found_idx = moves[0]
         pile = self._state.tableau[tab_idx]
         card = pile.peek()
@@ -444,14 +511,21 @@ class CruelWindow(Gtk.ApplicationWindow):
         GLib.timeout_add(
             440,
             lambda: (
-                self._animate_auto_moves(moves[1:], check_win, check_redeal_prompt)
+                self._animate_auto_moves(
+                    moves[1:],
+                    check_win,
+                    check_redeal_prompt,
+                    generation,
+                )
                 or False
             ),
         )
+        return False
 
     def _check_win(self) -> bool:
         total = sum(len(f) for f in self._state.foundations)
-        if total == 52:
+        if total == 52 and not self._won_this_round:
+            self._won_this_round = True
             self._stats_started, self._stats_won = record_won(GAME_ID)
             self._update_stats_label()
             self._set_status("You win! 🎉")
